@@ -12,13 +12,19 @@ import torch
 import torch.optim
 
 from janelia_core.math.basic_functions import optimal_orthonormal_transform
+from janelia_core.ml.extra_torch_modules import FixedOffsetAbs
 from janelia_core.ml.extra_torch_modules import FixedOffsetTanh
 from janelia_core.visualization.matrix_visualization import cmp_n_mats
 from janelia_core.ml.torch_distributions import CondGaussianDistribution
 from janelia_core.ml.torch_distributions import CondFoldedNormalDistribution
 from janelia_core.ml.torch_distributions import CondVAEDistribution
 from janelia_core.ml.torch_distributions import MatrixGaussianProductDistribution
-from probabilistic_model_synthesis.distributions import FoldedNormalProductDistribution
+from probabilistic_model_synthesis.distributions import CondGammaDistribution
+from probabilistic_model_synthesis.distributions import GammaProductDistribution
+from probabilistic_model_synthesis.utilities import enforce_floor
+from probabilistic_model_synthesis.utilities import get_lr
+from probabilistic_model_synthesis.utilities import get_scalar_vl
+from probabilistic_model_synthesis.utilities import list_to_str
 
 
 # Define type aliases
@@ -86,8 +92,8 @@ class FAMdl(torch.nn.Module):
             m2: The second model
         """
 
-        ROW_SPAN = 1  # Number of rows in the gridspec
-        COL_SPAN = 12  # Number of columns in the gridspec
+        ROW_SPAN = 24  # Number of rows in the gridspec
+        COL_SPAN = 24  # Number of columns in the gridspec
 
         m2 = copy.deepcopy(m2)  # Copy m2 to local variable so changes to weights don't affect the passed object
 
@@ -95,13 +101,22 @@ class FAMdl(torch.nn.Module):
 
         def _make_subplot(loc, r_span, c_span, d1, d2, title):
             subplot = plt.subplot(grid_spec.new_subplotspec(loc, r_span, c_span))
-            subplot.plot(d1, 'b-')
-            subplot.plot(d2, 'r-')
+
+            min_vl = np.min(np.concatenate([d1, d2]))
+            max_vl = np.max(np.concatenate([d1, d2]))
+
+            identity_pts = np.asarray([min_vl, max_vl])
+            plt.plot(identity_pts, identity_pts, 'k--')
+            plt.xlabel('Mdl 1')
+            plt.ylabel('Mdl 2')
+
+            subplot.plot(d1, d2, 'r.')
+            subplot.axis('equal')
             subplot.title = plt.title(title)
 
         # Make plots of scalar variables
-        _make_subplot([0, 0], 1, 2, m1.mn.cpu().detach().numpy(), m2.mn.cpu().detach().numpy(), 'Mean')
-        _make_subplot([0, 3], 1, 2, m1.psi.cpu().detach().numpy(), m2.psi.cpu().detach().numpy(), 'psi')
+        _make_subplot([0, 0], 8, 8, m1.mn.cpu().detach().numpy(), m2.mn.cpu().detach().numpy(), 'Mean')
+        _make_subplot([12, 0], 8, 8, m1.psi.cpu().detach().numpy(), m2.psi.cpu().detach().numpy(), 'Psi')
 
         # Make plots of loading matrices
         c1 = m1.lm.cpu().detach().numpy()
@@ -113,9 +128,9 @@ class FAMdl(torch.nn.Module):
 
         w1_grid_info = {'grid_spec': grid_spec}
         w1_cell_info = list()
-        w1_cell_info.append({'loc': [0, 6], 'rowspan': 1, 'colspan': 2})
-        w1_cell_info.append({'loc': [0, 8], 'rowspan': 1, 'colspan': 2})
-        w1_cell_info.append({'loc': [0, 10], 'rowspan': 1, 'colspan': 2})
+        w1_cell_info.append({'loc': [0, 12], 'rowspan': 24, 'colspan': 3})
+        w1_cell_info.append({'loc': [0, 16], 'rowspan': 24, 'colspan': 3})
+        w1_cell_info.append({'loc': [0, 20], 'rowspan': 24, 'colspan': 3})
         w1_grid_info['cell_info'] = w1_cell_info
         cmp_n_mats([c1, c2, c_diff], show_colorbars=True, titles=['LM 1', 'LM 2', 'LM 1 - LM 2'],
                    grid_info=w1_grid_info)
@@ -383,21 +398,24 @@ class PriorCollection():
         return lm_parameters + mn_parameters + psi_parameters
 
 
-def generate_simple_prior_collection(n_prop_vars: int, n_latent_vars: int, min_gaussian_std: float = .001,
-                                     min_half_gaussian_sigma: float = .001) -> PriorCollection:
+def generate_simple_prior_collection(n_prop_vars: int, n_latent_vars: int, min_gaussian_std: float = .01,
+                                     min_gamma_conc_vl: float = 1.0, min_gamma_rate_vl: float = .01,
+                                     lm_mn_w_init_std: float = .01, lm_std_w_init_std: float = .01,
+                                     mn_mn_w_init_std: float = .01, mn_std_w_init_std: float = .01,
+                                     psi_conc_f_w_init_std: float = 1, psi_rate_f_w_init_std: float = .01,
+                                     psi_conc_bias_mn: float = 10.0, psi_rate_bias_mn: float = 10.0) -> PriorCollection:
     """ Generates conditional priors where simple functions of properties generate distribution parameters.
 
     The conditional priors over the coefficients of the loading matrix and mean vectors will be Gaussian, with:
 
         1) Means which are a linear function of properties
 
-        2) Standard deviations which are a composition of a linear function (of properties) with a tanh. The tanh
-        function has learnable scales for each input dimension and a fixed floor, to prevent standard deviations
-        from ever going below a certain bound.
+        2) Standard deviations which are passed through linear function (of properties), the absolute value will
+        be taken and then a fixed offset is added to prevent standard deviations from going below a certain bound.
 
-    The conditional priors over the private variances will be Folded Gaussian distributions with:
+    The conditional priors over the private variances will be Gamma distributions with:
 
-        1) A mu and sigma parameters which are functions of the same form as (2) above.
+        1) Concentration and rate parameters which are functions of the same form as (2) above.
 
     Args:
         n_prop_vars: The number of properties the distributions are conditioned on.
@@ -407,8 +425,35 @@ def generate_simple_prior_collection(n_prop_vars: int, n_latent_vars: int, min_g
         min_gaussian_std: The floor on the standard deviation for the distributions on the coefficients of the loading
         matrix and mean vector.
 
-        min_half_gaussian_sigma: The floor on values that sigma parameter of the Half Gaussian distributions can take
+        min_gamma_conc_vl: The floor on values that the concentration parameter of the Gamma distributions can take
         on.
+
+        min_gamma_rate_vl: The floor on values that rate parameter of the folded Gamma distributions can take on.
+
+        lm_mn_w_init_std: When initializing the weights and biases of the linears functions predicting
+        the mean of the distributions for the coefficients of the loading matrix, we initialize
+        from centered normals, with standard deviations specified by this parameters.
+
+        lm_std_w_init_std: Standard deviation for initializing weights and biases for linear function predicting the
+        standard deviation of distributions over the loading matrix coefficients
+
+        mn_mn_w_init_std: Standard deviation for initializing weights and biases for linear function predicting the
+        mean of distributions over the coefficients of mean vectors
+
+        mn_std_w_init_std: Standard deviation for initializing weights and biases for linear function predicting the
+        standard deviation of distributions over the coefficents of mean vectors
+
+        psi_conc_f_w_init_std: Standard deviation for initializing weights and biases for linear function predicting the
+        concentration parameter of distributions over private variances
+
+        psi_rate_f_w_init_std: Standard deviation for initializing weights and biases for linear function predicting the
+        rate parameter of distributions over private variances
+
+        psi_conc_bias_mn: The mean value for initializing the biases for the linear functions predicting the
+        concentration parameters of distributions over private variances.
+
+        psi_rate_bias_mn: The mean value for initializing the biases for the linear functions predicting the
+        rate parameters of distributions over private variances.
 
     Returns:
 
@@ -418,21 +463,38 @@ def generate_simple_prior_collection(n_prop_vars: int, n_latent_vars: int, min_g
     # Generate prior for loadings matrix
     lm_mn_f = torch.nn.Linear(in_features=n_prop_vars, out_features=n_latent_vars, bias=True)
     lm_std_f = torch.nn.Sequential(torch.nn.Linear(in_features=n_prop_vars, out_features=n_latent_vars, bias=True),
-                                   FixedOffsetTanh(d=n_latent_vars, m=min_gaussian_std))
+                                   FixedOffsetAbs(o=min_gaussian_std))
+
+    torch.nn.init.normal_(lm_mn_f.weight, mean=0.0, std=lm_mn_w_init_std)
+    torch.nn.init.normal_(lm_mn_f.bias, mean=0.0, std=lm_mn_w_init_std)
+    torch.nn.init.normal_(lm_std_f[0].weight, mean=0.0, std=lm_std_w_init_std)
+    torch.nn.init.normal_(lm_std_f[0].bias, mean=0.0, std=lm_std_w_init_std)
+
     lm_prior = CondGaussianDistribution(mn_f=lm_mn_f, std_f=lm_std_f)
 
-    # Generate prior for mean vector
     mn_mn_f = torch.nn.Linear(in_features=n_prop_vars, out_features=1, bias=True)
     mn_std_f = torch.nn.Sequential(torch.nn.Linear(in_features=n_prop_vars, out_features=1, bias=True),
-                                   FixedOffsetTanh(d=1, m=min_gaussian_std))
+                                   FixedOffsetAbs(o=min_gaussian_std))
+
+    torch.nn.init.normal_(mn_mn_f.weight, mean=0.0, std=mn_mn_w_init_std)
+    torch.nn.init.normal_(mn_mn_f.bias, mean=0.0, std=mn_mn_w_init_std)
+    torch.nn.init.normal_(mn_std_f[0].weight, mean=0.0, std=mn_std_w_init_std)
+    torch.nn.init.normal_(mn_std_f[0].bias, mean=0.0, std=mn_std_w_init_std)
+
     mn_prior = CondGaussianDistribution(mn_f=mn_mn_f, std_f=mn_std_f)
 
     # Generate prior for private variances
-    psi_mu_f = torch.nn.Sequential(torch.nn.Linear(in_features=n_prop_vars, out_features=1, bias=True),
-                                   FixedOffsetTanh(d=1, m=0.0))
-    psi_sigma_f = torch.nn.Sequential(torch.nn.Linear(in_features=n_prop_vars, out_features=1, bias=True),
-                                      FixedOffsetTanh(d=1, m=min_half_gaussian_sigma))
-    psi_prior = CondFoldedNormalDistribution(mu_f=psi_mu_f, sigma_f=psi_sigma_f)
+    psi_conc_f = torch.nn.Sequential(torch.nn.Linear(in_features=n_prop_vars, out_features=1, bias=True),
+                                     FixedOffsetAbs(o=min_gamma_conc_vl))
+    psi_rate_f = torch.nn.Sequential(torch.nn.Linear(in_features=n_prop_vars, out_features=1, bias=True),
+                                     FixedOffsetAbs(o=min_gamma_rate_vl))
+
+    torch.nn.init.normal_(psi_conc_f[0].weight, mean=0.0, std=psi_conc_f_w_init_std)
+    torch.nn.init.normal_(psi_conc_f[0].bias, mean=psi_conc_bias_mn, std=psi_conc_f_w_init_std)
+    torch.nn.init.normal_(psi_rate_f[0].weight, mean=0.0, std=psi_rate_f_w_init_std)
+    torch.nn.init.normal_(psi_rate_f[0].bias, mean=psi_rate_bias_mn, std=psi_rate_f_w_init_std)
+
+    psi_prior = CondGammaDistribution(conc_f=psi_conc_f, rate_f=psi_rate_f)
 
     return PriorCollection(lm_prior=lm_prior, mn_prior=mn_prior, psi_prior=psi_prior)
 
@@ -447,7 +509,7 @@ def generate_basic_posteriors(n_obs_vars: Sequence[int], n_smps: Sequence[int], 
     the distribution for each coefficient being learned independently.
 
     We represent posterior distributions over the coefficients of the loading matrix and mean vector
-    as Gaussians, and posterior distributions over private variances as Folded Guassian distributions.
+    as Gaussians, and posterior distributions over private variances as Gamma distributions.
 
     The posterior over latents is represented as Gaussian distributions, with seperate means for each
     data point and a shared covariance matrix for all data points.
@@ -466,7 +528,7 @@ def generate_basic_posteriors(n_obs_vars: Sequence[int], n_smps: Sequence[int], 
         mn_opts: Dictionary of options to provide to MatrixGaussianProductDistribution when creating the
         posteriors over mean vectors.  See that object for available options.
 
-        psi_opts: Dictionary of options to provide to MatrixFoldedNormalProductDistribution when creating the
+        psi_opts: Dictionary of options to provide to GammaProductDistribution when creating the
         posteriors over private variances.  See that object for available options.
 
     Returns:
@@ -489,7 +551,8 @@ def generate_basic_posteriors(n_obs_vars: Sequence[int], n_smps: Sequence[int], 
         latent_post = FAVariationalPosterior(n_latent_vars=n_latent_vars, n_smps=n_smps[i])
         lm_post = MatrixGaussianProductDistribution(shape=[n_i, n_latent_vars], **lm_opts)
         mn_post = MatrixGaussianProductDistribution(shape=[n_i, 1], **mn_opts)
-        psi_post = FoldedNormalProductDistribution(n_vars=n_i, **psi_opts)
+        #psi_post = FoldedNormalProductDistribution(n_vars=n_i, **psi_opts)
+        psi_post = GammaProductDistribution(n_vars=n_i, **psi_opts)
 
         post_collections[i] = PosteriorCollection(latent_post=latent_post, lm_post=lm_post, mn_post=mn_post,
                                                   psi_post=psi_post)
@@ -570,8 +633,8 @@ class Fitter():
     useful if wanting to later perform amortized inference on model parameters).  In this case, the user can
     provide VI collections where the posteriors for these parameters are the same object.  In this case, the KL
     divergence between the posteriors and the prior can be trivially set to 0 by simply setting the prior equal
-    to the posteriors, and fitting can be simplified by setting the "ignore_prior" option for the parameters with
-    shared posteriors to True.
+    to the posteriors, and fitting can be simplified by setting the "skip_kl" option for the parameters with
+    shared posteriors to True when calling fit.
 
     """
 
@@ -593,7 +656,8 @@ class Fitter():
         self.n_mdls = len(self.vi_collections)
 
     def fit(self, n_epochs: int, n_batches: int = 2, init_lr: float = .01, milestones: List[int] = None,
-            gamma: float = .1, update_int: int = 10):
+            gamma: float = .1, skip_lm_kl: bool = False, skip_mn_kl: bool = False,
+            skip_psi_kl: bool = False, update_int: int = 10):
         """ Fits FA models together.
 
         Args:
@@ -607,6 +671,16 @@ class Fitter():
             the initial learning rate will be used the whole time.
 
             gamma: The factor to reduce the learning rate by at each milestone in milestones
+
+            skip_lm_kl: If true, kl divergences between posteriors and the prior for loading matrices are not calculated.
+            This can be safely set to true when all posteriors are the same shared conditional posterior (in which
+            minimizing the KL divergence can be achieved trivially by setting the prior also equal to the shared
+            conditional posterior).
+
+            skip_mn_kl: If true, kl divergences between posteriors and the prior for mean vectors are not calculated.
+
+            skip_psi_kl: If true, kl divergences between posteriors and the prior for the private variances are not
+            calculated.
 
             update_int: The number of epochs after which we provide the user with a status update
 
@@ -651,6 +725,9 @@ class Fitter():
         # into the objective we are optimizing.
 
         params = self.priors.parameters() + list(itertools.chain(*[coll.parameters() for coll in self.vi_collections]))
+
+        # Make sure we have no duplicate parameters
+        params = list(set(params))
 
         optimizer = torch.optim.Adam(params=params, lr=init_lr)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer=optimizer, milestones=milestones, gamma=gamma)
@@ -718,8 +795,8 @@ class Fitter():
                         psi_standard_smp = psi_standard_smp.squeeze()
 
                         # Enforce floor on sampled private variances
-                        _enforce_floor(psi_compact_smp, self.min_psi)
-                        _enforce_floor(psi_standard_smp, self.min_psi)
+                        enforce_floor(psi_compact_smp, self.min_psi)
+                        enforce_floor(psi_standard_smp, self.min_psi)
 
                     else:
                         psi_standard_smp = None
@@ -732,15 +809,15 @@ class Fitter():
                     # Compute KL divergences
                     latent_kl = corr_f*mdl_posteriors.latent_post.kl_btw_standard_normal(inds=batch_inds)
 
-                    if not lm_point_estimate:
+                    if (not lm_point_estimate) and (not skip_lm_kl):
                         lm_kl = torch.sum(mdl_posteriors.lm_post.kl(d_2=self.priors.lm_prior, x=mdl_props, smp=lm_compact_smp))
                     else:
                         lm_kl = 0
-                    if not mn_point_estimate:
+                    if (not mn_point_estimate) and (not skip_mn_kl):
                         mn_kl = torch.sum(mdl_posteriors.mn_post.kl(d_2=self.priors.mn_prior, x=mdl_props, smp=mn_compact_smp))
                     else:
                         mn_kl = 0
-                    if not psi_point_estimate:
+                    if (not psi_point_estimate) and (not skip_psi_kl):
                         psi_kl = torch.sum(mdl_posteriors.psi_post.kl(d_2=self.priors.psi_prior, x=mdl_props, smp=psi_compact_smp))
                     else:
                         psi_kl = 0
@@ -748,30 +825,37 @@ class Fitter():
                     # Calculate gradients for this batch
                     mdl_obj = nell + latent_kl + lm_kl + mn_kl + psi_kl
                     mdl_obj.backward()
-                    obj += _get_vl(mdl_obj)
+                    obj += get_scalar_vl(mdl_obj)
 
                     # Log progress
-                    batch_nell_log[b_i, m_i] = _get_vl(nell)
-                    batch_latent_kl_log[b_i, m_i] = _get_vl(latent_kl)
-                    batch_lm_kl_log[b_i, m_i] = _get_vl(lm_kl)
-                    batch_mn_kl_log[b_i, m_i] = _get_vl(mn_kl)
-                    batch_psi_kl_log[b_i, m_i] = _get_vl(psi_kl)
+                    batch_nell_log[b_i, m_i] = get_scalar_vl(nell)
+                    batch_latent_kl_log[b_i, m_i] = get_scalar_vl(latent_kl)
+                    batch_lm_kl_log[b_i, m_i] = get_scalar_vl(lm_kl)
+                    batch_mn_kl_log[b_i, m_i] = get_scalar_vl(mn_kl)
+                    batch_psi_kl_log[b_i, m_i] = get_scalar_vl(psi_kl)
 
                 optimizer.step()
-                scheduler.step()
 
-                # Update logs
-                obj_log[e_i] = obj
-                nell_log[e_i, :] = np.mean(batch_nell_log, axis=0)
-                latent_kl_log[e_i, :] = np.mean(batch_latent_kl_log, axis=0)
-                lm_kl_log[e_i, :] = np.mean(batch_lm_kl_log, axis=0)
-                mn_kl_log[e_i, :] = np.mean(batch_mn_kl_log, axis=0)
-                psi_kl_log[e_i, :] = np.mean(batch_psi_kl_log, axis=0)
+            # Enforce floor on private variances if estimating them with point estimates
+            if psi_point_estimate:
+                for coll in self.vi_collections:
+                    enforce_floor(coll.mdl.psi, self.min_psi)
+
+            # Update logs
+            obj_log[e_i] = obj
+            nell_log[e_i, :] = np.mean(batch_nell_log, axis=0)
+            latent_kl_log[e_i, :] = np.mean(batch_latent_kl_log, axis=0)
+            lm_kl_log[e_i, :] = np.mean(batch_lm_kl_log, axis=0)
+            mn_kl_log[e_i, :] = np.mean(batch_mn_kl_log, axis=0)
+            psi_kl_log[e_i, :] = np.mean(batch_psi_kl_log, axis=0)
 
             if e_i % update_int == 0:
                 self._print_status_update(epoch_i=e_i, obj_v=obj_log[e_i], nell_v=nell_log[e_i, :],
                                           latent_kl_v=latent_kl_log[e_i, :], lm_kl_v=lm_kl_log[e_i, :],
-                                          mn_kl_v=mn_kl_log[e_i, :], psi_kl_v=psi_kl_log[e_i, :])
+                                          mn_kl_v=mn_kl_log[e_i, :], psi_kl_v=psi_kl_log[e_i, :],
+                                          lr=get_lr(optimizer))
+
+            scheduler.step()
 
         # Generate final log structure
         log = {'obj': obj_log, 'nell': nell_log, 'latent_kl': latent_kl_log, 'lm_kl': lm_kl_log,
@@ -844,25 +928,27 @@ class Fitter():
         ax = plt.subplot(3, 2, 5)
         ax.plot(log['mn_kl'])
         plt.xlabel('Epoch')
-        plt.ylabel('MN KL')
+        plt.ylabel('Mn KL')
 
         ax = plt.subplot(3, 2, 6)
         ax.plot(log['psi_kl'])
         plt.xlabel('Epoch')
-        plt.ylabel('PSI KL')
+        plt.ylabel('Psi KL')
 
     @staticmethod
-    def _print_status_update(epoch_i, obj_v, nell_v, latent_kl_v, lm_kl_v, mn_kl_v, psi_kl_v):
+    def _print_status_update(epoch_i, obj_v, nell_v, latent_kl_v, lm_kl_v, mn_kl_v, psi_kl_v, lr):
         """ Prints a formatted status update to the screen. """
         print('')
         print('=========== EPOCH ' + str(epoch_i) + ' COMPLETE ===========')
         print('Obj: {:.2e}'.format(obj_v))
         print('----------------------------------------')
-        print('NELL: ' + _list_to_str(nell_v))
-        print('Latent KL: ' + _list_to_str(latent_kl_v))
-        print('LM KL: ' + _list_to_str(lm_kl_v))
-        print('MN KL: ' + _list_to_str(mn_kl_v))
-        print('Psi KL: ' + _list_to_str(psi_kl_v))
+        print('NELL: ' + list_to_str(nell_v))
+        print('Latent KL: ' + list_to_str(latent_kl_v))
+        print('LM KL: ' + list_to_str(lm_kl_v))
+        print('Mn KL: ' + list_to_str(mn_kl_v))
+        print('Psi KL: ' + list_to_str(psi_kl_v))
+        print('----------------------------------------')
+        print('LR: ' + str(lr))
 
     @staticmethod
     def _sample_posterior(post: CondVAEDistribution, props: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -870,30 +956,4 @@ class Fitter():
         standard_smp = post.form_standard_sample(compact_smp)
         return compact_smp, standard_smp
 
-
-# Helper functions
-
-
-def _enforce_floor(x: torch.Tensor, flr: float):
-    """ Enforces a floor on values in a tensor. """
-    with torch.no_grad():
-        x.data[x.data < flr] = flr
-
-
-def _get_vl(x: Union[torch.Tensor, float]):
-    """ Helper function to always return either a float or numpy array no matter the input. """
-    if isinstance(x, torch.Tensor):
-        return x.detach().cpu().numpy()
-    else:
-        return x
-
-
-def _list_to_str(x: List[float]) -> str:
-    """ Produces a string of formatted floating point numbers. """
-
-    strs = ''
-    for x_i in x:
-        strs += '{:.2e}, '.format(x_i)
-
-    return strs[0:-2]
 
