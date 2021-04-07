@@ -173,6 +173,41 @@ class FAMdl(torch.nn.Module):
 
         return ll
 
+    def log_prob(self, x: torch.Tensor, lm: OptionalTensor = None, mn: OptionalTensor = None,
+                      psi: OptionalTensor = None) -> torch.Tensor:
+        """ Computes the log probability of observations.
+
+        Args:
+            x: Observed values of shape n_smps*n_obs_variables
+
+            lm: If provided, uses this in place of the loading matrix parameter of the model.
+
+            mn: If provided, uses this in place of the mean parameter of the model.
+
+            psi: If provided, uses this in place of the psi parameter of the model.
+
+        Returns:
+
+            ll: The log-likelihood of each sample.  Of shape n_smps.
+        """
+
+        n_smps, n_obs_vars = x.shape
+
+        if lm is None:
+            lm = self.lm
+        if mn is None:
+            mn = self.mn
+        if psi is None:
+            psi = self.psi
+
+        x_centered = x - mn
+        cov_m = torch.matmul(lm, lm.t()) + torch.diag(psi)
+
+        ll = (-.5*n_obs_vars*self.log_2_pi - .5*torch.logdet(cov_m)
+              - .5*torch.sum((torch.matmul(x_centered, torch.inverse(cov_m))*x_centered), dim=1))
+
+        return ll
+
     def sample(self, n_smps: int, lm: OptionalTensor = None, mn: OptionalTensor = None,
                psi: OptionalTensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Generates samples from the model.
