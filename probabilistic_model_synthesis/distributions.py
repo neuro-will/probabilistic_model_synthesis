@@ -73,7 +73,7 @@ class GammaProductDistribution(CondGammaDistribution):
     """
 
     def __init__(self, n_vars: int, alpha_lb: float = 1.0, alpha_iv: float = 5.0,
-                 beta_lb: float = .001, beta_iv: float = 5.0):
+                 beta_lb: float = .00001, beta_iv: float = 5.0):
         """ Creates a new FoldedNormalProductDistribution object.
 
         Args:
@@ -90,6 +90,11 @@ class GammaProductDistribution(CondGammaDistribution):
             beta_iv: The initial value for beta parameters.  All distributions will be initialized to have the
             same initial values.
         """
+
+        self.n_vars = n_vars
+        self.alpha_lb = alpha_lb
+        self.beta_lb = beta_lb
+
         alpha_f = torch.nn.Sequential(IndSmpConstantRealFcn(n=n_vars), FixedOffsetAbs(o=alpha_lb))
         beta_f = torch.nn.Sequential(IndSmpConstantRealFcn(n=n_vars), FixedOffsetAbs(o=beta_lb))
 
@@ -97,4 +102,74 @@ class GammaProductDistribution(CondGammaDistribution):
         beta_f[0].f.vl.data[:] = beta_iv
 
         super().__init__(conc_f=alpha_f, rate_f=beta_f)
+
+    def set_mean(self, mean: torch.Tensor) -> torch.Tensor:
+        """ Sets the means of the gamma distributions, while not adjusting standard deviations.
+
+        This function adjusts the rate and concentration parameters of the individual Gamma distributions, to achieve
+        the specified means while not adjusting the standard deviations.
+
+        Args:
+            mean: Tensor specifying mean values to set.  mean[i] is the mean for the distribution of the i^th
+            random variable.
+
+        Raises:
+            ValueError: If the length of mean is different than the number of random variables the distribution is over.
+
+            RuntimeError: If setting the specified means requires one or more alpha or beta values that are out of
+            bounds.
+
+        """
+
+        if len(mean) != self.n_vars:
+            raise(ValueError('Length of mean does not equal number of random variables distribution is specified over.'))
+
+        cur_std = self.std(x=torch.ones(self.n_vars)).squeeze()
+
+        new_alpha = (mean**2)/(cur_std**2) - self.alpha_lb
+        new_beta = mean/(cur_std**2) - self.beta_lb
+
+        if torch.any(new_alpha < self.alpha_lb):
+            raise(RuntimeError('Setting the specified mean requires one or more alpha values that are out of range.'))
+
+        if torch.any(new_beta < self.beta_lb):
+            raise(RuntimeError('Setting the specified mean requires one or more beta values that are out of range.'))
+
+        self.conc_f[0].f.vl.data = new_alpha
+        self.rate_f[0].f.vl.data = new_beta
+
+    def set_std(self, std: torch.Tensor) -> torch.Tensor:
+        """ Sets the standard deviations of the gamma distributions, while not adjusting means.
+
+        This function adjusts the rate and concentration parameters of the individual Gamma distributions, to achieve
+        the specified standard deviations while not adjusting the means.
+
+        Args:
+            std: Tensor specifying standard deviation values to set.  stds[i] is the standard deviation for the
+            distribution of the i^th random variable.
+
+        Raises:
+            ValueError: If the length of std is different than the number of random variables the distribution is over.
+
+            RuntimeError: If setting the specified standard deviations requires one or more alpha or beta values that
+            are out of bounds
+        """
+
+        if len(std) != self.n_vars:
+            raise (
+                ValueError('Length of std does not equal number of random variables distribution is specified over.'))
+
+        cur_mn = self(x=torch.ones(self.n_vars)).squeeze()
+
+        new_alpha = (cur_mn**2)/(std**2) - self.alpha_lb
+        new_beta = cur_mn/(std**2) - self.beta_lb
+
+        if torch.any(new_alpha < self.alpha_lb):
+            raise(RuntimeError('Setting the specified std requires one or more alpha values that are out of range.'))
+
+        if torch.any(new_beta < self.beta_lb):
+            raise(RuntimeError('Setting the specified std requires one or more beta values that are out of range.'))
+
+        self.conc_f[0].f.vl.data = new_alpha
+        self.rate_f[0].f.vl.data = new_beta
 

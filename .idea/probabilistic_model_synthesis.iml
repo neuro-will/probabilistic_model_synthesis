@@ -5,5 +5,7 @@
     <orderEntry type="jdk" jdkName="Python 3.7 (probabilistic_model_synthesis)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="janelia_core" />
+    <orderEntry type="module" module-name="janelia_core" />
+    <orderEntry type="module" module-name="ahrens_wbo" />
   </component>
 </module>
