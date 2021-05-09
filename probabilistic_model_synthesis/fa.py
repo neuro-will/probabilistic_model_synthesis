@@ -431,9 +431,14 @@ class Fitter():
             skip_psi_kl: If true, kl divergences between posteriors and the prior for the private variances are not
             calculated.
 
-            update_int: The number of epochs after which we provide the user with a status update
+            update_int: The number of epochs after which we provide the user with a status update.  If None,
+            no updates will be printed.
 
             cp_epochs: A sequence of epochs after which check point should be created.
+
+            cp_save_folder: A folder where check points should be saved
+
+            cp_save_str: A string to add to the name of saved check point files (see save_checkpoint() for more details).
 
             optimize_only_latents: If true, only the parameters of the distributions over latents are are optimized.
             This is useful when wanting to hold the distributions over model parameters fixed but infer latents for
@@ -475,12 +480,10 @@ class Fitter():
         if milestones is None:
             milestones = [n_epochs + 1]
 
-        # Determine if there are any parameters we are estimating with point estimates
-        lm_point_estimate = self.vi_collections[0].mdl.lm is not None
-        mn_point_estimate = self.vi_collections[0].mdl.mn is not None
+        # See if we are estimating psi with a point estimate, so we can enforce floors on these estimates if we are
         psi_point_estimate = self.vi_collections[0].mdl.psi is not None
 
-        # Gather all parameters we will be optimizing - note that this code assumes the user has not be "wasteful" in
+        # Gather all parameters we will be optimizing - note that this code assumes the user has not been "wasteful" in
         # creating parameters that will not be optimized (e.g., by creating posteriors and priors for parameters we are
         # estimating with point estimates). However, if the user has been "wasteful" the code below will still produce
         # the correct computations; we will just waste space carrying around and optimizing tensors which do not factor
@@ -533,66 +536,26 @@ class Fitter():
                 optimizer.zero_grad()
 
                 for m_i in range(self.n_mdls):
+                    mdl_coll = self.vi_collections[m_i]
                     mdl_device = self.vi_collection_devices[m_i]
-                    mdl_posteriors = self.vi_collections[m_i].posteriors
-                    mdl_props = self.vi_collections[m_i].props
-                    fa_mdl = self.vi_collections[m_i].mdl
+                    mdl_posteriors = mdl_coll.posteriors
 
                     # Move the posteriors to the appropriate device (this is neccesary if using shared posteriors)
                     mdl_posteriors.to(mdl_device)
 
                     batch_inds = batch_smp_inds[m_i][b_i]
-                    # Get the data for this minibatch and make sure it is on the correct device
-                    data_b_i = self.vi_collections[m_i].data[batch_inds, :].to(mdl_device)
-                    n_batch_data_pts = data_b_i.shape[0]
+                    n_batch_data_pts = len(batch_inds)
 
-                    # Sample our posteriors
-                    latents_smp = mdl_posteriors.latent_post.sample(inds=batch_inds)
-
-                    if not lm_point_estimate:
-                        # We produce samples in both compact and standard form.  Compact form is used for
-                        # computing KL divergences; standard form is used when computing likelihoods
-                        lm_compact_smp, lm_standard_smp = _sample_posterior(post=mdl_posteriors.lm_post, props=mdl_props)
-                    else:
-                        lm_standard_smp = None  # Passing in None to the appropriate functions will signal we use the
-                                                # parameter stored in the FA model object
-
-                    if not mn_point_estimate:
-                        mn_compact_smp, mn_standard_smp = _sample_posterior(post=mdl_posteriors.mn_post, props=mdl_props)
-                        mn_standard_smp = mn_standard_smp.squeeze()
-                    else:
-                        mn_standard_smp = None
-
-                    if not psi_point_estimate:
-                        psi_compact_smp, psi_standard_smp = _sample_posterior(post=mdl_posteriors.psi_post, props=mdl_props)
-                        psi_standard_smp = psi_standard_smp.squeeze()
-
-                        # Enforce floor on sampled private variances
-                        enforce_floor(psi_compact_smp, self.min_psi)
-                        enforce_floor(psi_standard_smp, self.min_psi)
-                    else:
-                        psi_standard_smp = None
-
-                    # Compute expected log-likelihood
                     corr_f = float(model_n_data_pts[m_i])/n_batch_data_pts
-                    nell = -corr_f*torch.sum(fa_mdl.cond_log_prob(z=latents_smp, x=data_b_i, lm=lm_standard_smp,
-                                                                  mn=mn_standard_smp, psi=psi_standard_smp))
+                    elbo_vls_i = approximate_elbo(coll=mdl_coll, priors=self.priors, n_smps=1, inds=batch_inds,
+                                                  corr_f=corr_f, skip_lm_kl=skip_lm_kl, skip_mn_kl=skip_mn_kl,
+                                                  skip_psi_kl=skip_psi_kl)
 
-                    # Compute KL divergences
-                    latent_kl = corr_f*mdl_posteriors.latent_post.kl_btw_standard_normal(inds=batch_inds)
-
-                    if (not lm_point_estimate) and (not skip_lm_kl):
-                        lm_kl = torch.sum(mdl_posteriors.lm_post.kl(d_2=self.priors.lm_prior, x=mdl_props, smp=lm_compact_smp))
-                    else:
-                        lm_kl = 0
-                    if (not mn_point_estimate) and (not skip_mn_kl):
-                        mn_kl = torch.sum(mdl_posteriors.mn_post.kl(d_2=self.priors.mn_prior, x=mdl_props, smp=mn_compact_smp))
-                    else:
-                        mn_kl = 0
-                    if (not psi_point_estimate) and (not skip_psi_kl):
-                        psi_kl = torch.sum(mdl_posteriors.psi_post.kl(d_2=self.priors.psi_prior, x=mdl_props, smp=psi_compact_smp))
-                    else:
-                        psi_kl = 0
+                    nell = -1*elbo_vls_i['ell']
+                    latent_kl = elbo_vls_i['latent_kl']
+                    lm_kl = elbo_vls_i['lm_kl']
+                    mn_kl = elbo_vls_i['mn_kl']
+                    psi_kl = elbo_vls_i['psi_kl']
 
                     # Calculate gradients for this batch
                     mdl_obj = nell + latent_kl + lm_kl + mn_kl + psi_kl
@@ -622,7 +585,7 @@ class Fitter():
             mn_kl_log[e_i, :] = np.mean(batch_mn_kl_log, axis=0)
             psi_kl_log[e_i, :] = np.mean(batch_psi_kl_log, axis=0)
 
-            if e_i % update_int == 0:
+            if (update_int is not None) and (e_i % update_int == 0):
                 t_now = time.time()
                 self._print_status_update(epoch_i=e_i, obj_v=obj_log[e_i], nell_v=nell_log[e_i, :],
                                           latent_kl_v=latent_kl_log[e_i, :], lm_kl_v=lm_kl_log[e_i, :],
@@ -761,21 +724,21 @@ class Fitter():
                 mdl_posteriors.to(mdl_device)
 
                 if not lm_point_estimate:
-                    lm_compact_smp, _ = self._sample_posterior(post=mdl_posteriors.lm_post, props=mdl_props)
+                    lm_compact_smp, _ = _sample_posterior(post=mdl_posteriors.lm_post, props=mdl_props)
                     lm_kl = torch.sum(mdl_posteriors.lm_post.kl(d_2=self.priors.lm_prior, x=mdl_props,
                                                                 smp=lm_compact_smp))
                 else:
                     lm_kl = 0
 
                 if not mn_point_estimate:
-                    mn_compact_smp, _ = self._sample_posterior(post=mdl_posteriors.mn_post, props=mdl_props)
+                    mn_compact_smp, _ = _sample_posterior(post=mdl_posteriors.mn_post, props=mdl_props)
                     mn_kl = torch.sum(mdl_posteriors.mn_post.kl(d_2=self.priors.mn_prior, x=mdl_props,
                                                                 smp=mn_compact_smp))
                 else:
                     mn_kl = 0
 
                 if not psi_point_estimate:
-                    psi_compact_smp, _ = self._sample_posterior(post=mdl_posteriors.psi_post, props=mdl_props)
+                    psi_compact_smp, _ = _sample_posterior(post=mdl_posteriors.psi_post, props=mdl_props)
                     psi_kl = torch.sum(mdl_posteriors.psi_post.kl(d_2=self.priors.psi_prior, x=mdl_props,
                                                                   smp=psi_compact_smp))
                 else:
@@ -918,6 +881,22 @@ class PosteriorCollection():
         self.mn_post = mn_post
         self.psi_post = psi_post
 
+    @staticmethod
+    def from_checkpont(cp: dict) -> 'PosteriorCollection':
+        """ Generates a new PosteriorCollection from a checkpoint dictionary.
+
+        Args:
+
+            cp: The checkpoint dictionary
+
+        Returns:
+
+            collection: The new collection
+        """
+
+        return PosteriorCollection(latent_post=cp['latent_post'], lm_post=cp['lm_post'], mn_post=cp['mn_post'],
+                                   psi_post=cp['psi_post'])
+
     def generate_checkpoint(self):
         """ Generates a check point of the collection.
 
@@ -1006,6 +985,21 @@ class PriorCollection():
             return None
         else:
             return params[0].device
+
+    @staticmethod
+    def from_checkpoint(cp: dict) -> 'PriorCollection':
+        """ Generates a new PriorCollection from a checkpoint.
+
+        Args:
+
+            cp: The checkpoint dictionary
+
+        Returns:
+
+            coll: The new collection
+        """
+
+        return PriorCollection(lm_prior=cp['lm_prior'], mn_prior=cp['mn_prior'], psi_prior=cp['psi_prior'])
 
     def generate_checkpoint(self):
         """ Generates a check point of the collection.
@@ -1100,6 +1094,27 @@ class VICollection():
         self.mdl = mdl
         self.posteriors = posteriors
 
+    @staticmethod
+    def from_checkpoint(cp: dict, data: torch.Tensor = None, props: torch.Tensor = None) -> 'VICollection':
+        """ Generates a new VI Collection from a checkpoint dictionary.
+
+        Args:
+
+            cp: The checkpoint dictionary
+
+            data: Optional data to add to the created VI Collection (as checkpoints don't contain data)
+
+            props: Optional properties to add to the created VI Collection (as checkpoints don't contain properties)
+
+        Return:
+
+            coll: The new collection
+
+        """
+        return VICollection(data=data, props=props,
+                            posteriors=PosteriorCollection.from_checkpont(cp['posteriors']),
+                            mdl=cp['mdl'])
+
     def generate_checkpoint(self):
         """ Generates a check point of the collection.
 
@@ -1142,10 +1157,11 @@ class VICollection():
 
 
 def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, min_psi: float = .0001,
-                     corr_f: float = 1.0, inds: torch.Tensor = None):
+                     inds: torch.Tensor = None, corr_f: float = 1.0, skip_lm_kl: bool = False,
+                     skip_mn_kl: bool = False, skip_psi_kl: bool = False):
     """ Approximates the ELBO for a single model via sampling.
 
-    Calculations will be performed on whatever device the vi collection is on
+    Calculations will be performed on whatever device the vi collection is on.
 
     Args:
 
@@ -1155,9 +1171,38 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
 
         n_smps: The number of samples to use when calculating the ELBO
 
+        skip_lm_kl: True if KL divergence between the prior and posteriors over loading matrices should not be included
+        in the ELBO
+
+        inds: Indices of data points in coll.data that we should compute the ELBO for.  If not provided, all
+        data poitns will be used.
+
+        corr_f: A correction factor to be applied if using a subset of data points for computing the ELBO.  This is
+        useful when using mini-batches of data.  For example, if we call approximate_elbo for each minibatch, and in
+        each minibatch we use only 25% of the data points, then we need to correct for this by increasing the weight of
+        the expected log-liklihood and KL divergence for the latent values by a factor of 4.
+
+        skip_mn_kl: True if KL divergence between the prior and posteriors over means should not be included in the ELBO
+
+        skip_psi_kl: True if KL divergence between the prior and posteriors over private noise variances should not be
+        included in the ELBO
+
     Returns:
 
-        elbo: The approximated value of the ELBO.
+        elbo_vls: A dictionary with the following keys:
+
+            elbo: The value of the elbo
+
+            ell: The expected log-likelihood of the data
+
+            latent_kl: The kl divergence between the prior and posteriors over latent values
+
+            lm_kl: The kl divergence between the prior and posterior over the loading matrix
+
+            mn_kl: The kl divergence between the prior and posterior over the mean vector
+
+            psi_kl: The kl divergence between the prior and posterior over the nosie variances
+
     """
 
     # Move the priors to the same device the VI collection is on
@@ -1177,8 +1222,7 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
 
     # Approximate ELBO
     if inds is None:
-        inds = torch.range(0, data.shape[0])
-    print('inds.dtype: ' + str(inds.dtype))
+        inds = torch.arange(0, data.shape[0], dtype=torch.int64)
 
     elbo = 0.0
     for s_i in range(n_smps):
@@ -1218,15 +1262,15 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
         # Compute KL divergences
         latent_kl = corr_f * posteriors.latent_post.kl_btw_standard_normal(inds=inds)
 
-        if not lm_point_estimate:
+        if (not lm_point_estimate) and (not skip_lm_kl):
             lm_kl = torch.sum(posteriors.lm_post.kl(d_2=priors.lm_prior, x=props, smp=lm_compact_smp))
         else:
             lm_kl = 0
-        if not mn_point_estimate:
-            mn_kl = torch.summ(posteriors.mn_post.kl(d_2=priors.mn_prior, x=props, smp=mn_compact_smp))
+        if (not mn_point_estimate) and (not skip_mn_kl):
+            mn_kl = torch.sum(posteriors.mn_post.kl(d_2=priors.mn_prior, x=props, smp=mn_compact_smp))
         else:
             mn_kl = 0
-        if not psi_point_estimate:
+        if (not psi_point_estimate) and (not skip_psi_kl):
             psi_kl = torch.sum(posteriors.psi_post.kl(d_2=priors.psi_prior, x=props, smp=psi_compact_smp))
         else:
             psi_kl = 0
@@ -1240,10 +1284,11 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
     if orig_prior_device is not None:
         priors.to(orig_prior_device)
 
-    return {'elbo': elbo, 'latent_kl': latent_kl, 'lm_kl': lm_kl, 'mn_kl': mn_kl, 'psi_kl': psi_kl}
+    return {'elbo': elbo, 'ell': ell, 'latent_kl': latent_kl, 'lm_kl': lm_kl, 'mn_kl': mn_kl, 'psi_kl': psi_kl}
 
 
-def evaluate_check_points(cp_folder: StrOrPath, data: Sequence[torch.Tensor], props: Sequence[torch.Tensor]):
+def evaluate_check_points(cp_folder: StrOrPath, data: Sequence[torch.Tensor], props: Sequence[torch.Tensor],
+                          n_smps: int, fit_opts: dict = None, elbo_opts: dict = None, device: torch.device = None):
     """ Evaluates checkpoints.
 
     Args:
@@ -1256,39 +1301,53 @@ def evaluate_check_points(cp_folder: StrOrPath, data: Sequence[torch.Tensor], pr
 
     cp_folder = pathlib.Path(cp_folder)
 
+    if device is None:
+        device = torch.device('cpu')
+
+    if elbo_opts is None:
+        elbo_opts = {}
+
+    if fit_opts is None:
+        fit_opts = {'n_epochs': 100, 'init_lr': .1, 'milestones': [50], 'update_int': None}
+
     # Find all check point files
     cp_files = glob.glob(str(cp_folder / 'cp*.pt'))
     n_cps = len(cp_files)
 
-    # Evaluate the log-liklihood of data for each check point
+    # Approximates the optimal ELBO, holding priors and posteriors for model parameters fixed, for each check point
     n_mdls = len(data)
-    cp_ll = np.zeros([n_cps, n_mdls])
+    cp_elbo = np.zeros([n_cps, n_mdls])
+    cp_epochs = np.zeros(n_cps)
     for cp_i, cp_file in enumerate(cp_files):
         cp = torch.load(cp_file)
+        cp_epochs[cp_i] = cp['epoch']
+
+        priors = PriorCollection.from_checkpoint(cp['priors'])
+
         for m_i in range(n_mdls):
-            coll_i = cp['vi_collections'][m_i]
+
+            # Set the data and properties of the VI collection
+            coll_i = VICollection.from_checkpoint(cp=cp['vi_collections'][m_i], data=data[m_i], props=props[m_i])
+
+            # Infer latents for the data - here we learn new distributions only on the latent variables, leaving
+            # distributions over model parameters untouched
+            coll_i.posteriors.latent_post, _ = infer_latents(vi_collection=coll_i, data=data[m_i], device=device,
+                                                             fit_opts=fit_opts)
+
+            # Approximate value of the ELBO
             with torch.no_grad():
-                mdl_i = coll_i['mdl']
+                coll_i.to(device)
+                elbo_vls = approximate_elbo(coll=coll_i, priors=priors, n_smps=n_smps, **elbo_opts)
+                cp_elbo[cp_i, m_i] = elbo_vls['elbo'].detach().cpu().numpy()
 
-                if mdl_i.lm is None:
-                    lm_i = coll_i['posteriors']['lm_post'](props[m_i])
-                else:
-                    lm_i = None
+        print('Done with check point: ' + str(cp_i + 1) + ' of ' + str(n_cps) + '.')
 
-                if mdl_i.mn is None:
-                    mn_i = coll_i['posteriors']['mn_post'](props[m_i]).squeeze()
-                else:
-                    mn_i = None
+    # Sort everything
+    sort_order = np.argsort(cp_epochs)
+    cp_epochs = cp_epochs[sort_order]
+    cp_elbo = cp_elbo[sort_order, :]
 
-                if mdl_i.psi is None:
-                    psi_i = coll_i['posteriors']['psi_post'].mode(props[m_i]).squeeze()
-                else:
-                    psi_i = None
-            print('cp_' + str(cp_i) + ', mdl: ' + str(m_i))
-            ll = mdl_i.log_prob(x=data[m_i], lm=lm_i, mn=mn_i, psi=psi_i, use_sklearn=True)
-            cp_ll[cp_i, m_i] = np.sum(ll)/data[m_i].shape[0]
-
-    return cp_ll
+    return cp_epochs, cp_elbo
 
 
 def generate_simple_prior_collection(n_prop_vars: int, n_latent_vars: int, min_gaussian_std: float = .01,
@@ -1641,7 +1700,7 @@ def orthonormalize(lm: np.ndarray, latents: np.ndarray = None, unit_len_columns:
 
 
 def infer_latents(vi_collection: VICollection, data: torch.Tensor, fit_opts: dict,
-                  devices: OptionalDevices = None) -> FAVariationalPosterior:
+                  device: torch.device = None) -> Tuple[FAVariationalPosterior, dict]:
     """ Infers latents, leaving posterior and prior distributions over model parameters unchanged.
 
     Args:
@@ -1653,7 +1712,7 @@ def infer_latents(vi_collection: VICollection, data: torch.Tensor, fit_opts: dic
 
         fit_opts: Options to pass into the call to Fitter.fit().  See documentation of that function for more details.
 
-        devices: Devices that will be used for inference.  If None, all fitting will be done on CPU.
+        device: Device that will be used for inference.  If None, all fitting will be done on CPU.
 
     Returns:
 
@@ -1663,19 +1722,28 @@ def infer_latents(vi_collection: VICollection, data: torch.Tensor, fit_opts: dic
 
     """
 
+    if device is None:
+        device = [torch.device('cpu')]
+
     n_smps = data.shape[0]
     n_latent_vars = vi_collection.posteriors.lm_post(vi_collection.props).shape[1]
 
     latent_post = FAVariationalPosterior(n_latent_vars=n_latent_vars, n_smps=n_smps)
 
-    vi_collection = copy.deepcopy(vi_collection)
-    vi_collection.data = data
-    vi_collection.posteriors.latent_post = latent_post
+    # Generate posteriors and a vi collection for inference, copying by reference when things will not be changed to
+    # save memory
+    compute_posteriors = PosteriorCollection(latent_post=latent_post,
+                                             lm_post=vi_collection.posteriors.lm_post,
+                                             mn_post=vi_collection.posteriors.mn_post,
+                                             psi_post=vi_collection.posteriors.psi_post)
+
+    compute_vi_collection = VICollection(data=data, props=vi_collection.props, mdl=vi_collection.mdl,
+                                         posteriors=compute_posteriors)
 
     priors = PriorCollection(lm_prior=None, mn_prior=None, psi_prior=None)
 
     # Setup the fitter, setting min_psi to 0 so we make sure we don't unintentionally change any private variances
-    fitter = Fitter(vi_collections=[vi_collection], priors=priors, devices=devices, min_psi=0.0)
+    fitter = Fitter(vi_collections=[compute_vi_collection], priors=priors, devices=[device], min_psi=0.0)
     fitter.distribute()
     log = fitter.fit(**fit_opts, optimize_only_latents=True)
     fitter.distribute(devices=[torch.device('cpu')])
