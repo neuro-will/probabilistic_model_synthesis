@@ -9,6 +9,8 @@ import torch
 
 from janelia_core.math.basic_functions import bound
 from janelia_core.visualization.image_generation import generate_2d_fcn_image
+from janelia_core.math.basic_functions import list_grid_pts
+from janelia_core.ml.torch_distributions import CondVAEDistribution
 from janelia_core.ml.utils import torch_mod_to_fcn
 
 # Define aliases
@@ -58,7 +60,8 @@ def assign_colors_to_pts(pts: np.ndarray, lims: np.ndarray) -> np.ndarray:
     return np.stack([r_vls, g_vls, b_vls, alpha_vls]).transpose()
 
 
-def plot_three_dim_pts(pts: Union[torch.Tensor, np.ndarray], a: OptionalAxes = None) -> plt.Axes:
+def plot_three_dim_pts(pts: Union[torch.Tensor, np.ndarray], clrs: np.ndarray = None,
+                       a: OptionalAxes = None) -> plt.Axes:
     """  Plots a 3-d cloud of points.
 
     Args:
@@ -75,7 +78,12 @@ def plot_three_dim_pts(pts: Union[torch.Tensor, np.ndarray], a: OptionalAxes = N
         f = plt.figure()
         a = f.add_subplot(projection='3d')
 
-    a.scatter(pts[:,0], pts[:, 1], pts[:, 2], '.')
+    if clrs is None:
+        a.scatter(pts[:,0], pts[:, 1], pts[:, 2], '.')
+    else:
+        a.scatter(pts[:,0], pts[:, 1], pts[:, 2], '.', c=clrs)
+        #for pt_i, pt in enumerate(pts):
+        #    a.scatter(pt[0], pt[1], pt[2], '.', color=clrs[pt_i])
 
     return a
 
@@ -117,3 +125,7 @@ def plot_torch_dist(mn_f, std_f, extra_title_str: str = None, axes: OptionalMult
     im = axes[1].imshow(std_im)
     plt.colorbar(im, cax=cax, orientation='vertical')
     axes[1].set_title('Std' + extra_title_str)
+
+
+
+

@@ -10,12 +10,14 @@ from typing import List, Optional, Tuple, Sequence, Union
 
 import matplotlib
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import numpy.linalg
 import torch
 import torch.optim
 
 
+from janelia_core.math.basic_functions import list_grid_pts
 from janelia_core.ml.extra_torch_modules import ConstantRealFcn
 from janelia_core.ml.extra_torch_modules import FixedOffsetAbs
 from janelia_core.ml.extra_torch_modules import SumOfTiledHyperCubeBasisFcns
@@ -138,6 +140,82 @@ def align_intermediate_spaces(mn0: np.ndarray, lm0: np.ndarray, s0: np.ndarray,
     else:
         return mn1, lm1, w
 
+
+def compare_mean_and_lm_dists(lm_0_prior: CondVAEDistribution, mn_0_prior: CondVAEDistribution,
+                              s_0_prior: CondVAEDistribution, lm_1_prior: CondVAEDistribution,
+                              mn_1_prior: CondVAEDistribution, s_1_prior: CondVAEDistribution,
+                              dim_0_range: Sequence, dim_1_range: Sequence, n_pts_per_dim: Sequence):
+    # Code for function starts here
+    pts, dim_pts = list_grid_pts(grid_limits=np.asarray([dim_0_range, dim_1_range]), n_pts_per_dim=n_pts_per_dim)
+    pts = torch.tensor(pts)
+
+    lm0_mn = lm_0_prior(pts).detach().numpy()
+    mn0_mn = mn_0_prior(pts).detach().numpy().squeeze()
+    s0_mn = s_0_prior(pts).detach().numpy().squeeze()
+    lm1_mn = lm_1_prior(pts).detach().numpy()
+    mn1_mn = mn_1_prior(pts).detach().numpy().squeeze()
+    s1_mn = s_1_prior(pts).detach().numpy().squeeze()
+
+    # Determine alignment between intermediate latent spaces and align means
+    mn1_mn_al, lm1_mn_al, w = align_intermediate_spaces(lm0=lm0_mn, mn0=mn0_mn, s0=s0_mn,
+                                                        lm1=lm1_mn, mn1=mn1_mn, s1=s1_mn)
+
+    # Now get aligned standard deviations
+    if 'dists' in dir(lm_1_prior):
+        lm1_std = np.concatenate([d.std_f(pts).detach().numpy() for d in lm_1_prior.dists], axis=1)
+    else:
+        lm1_std = lm_1_prior.std_f(pts).detach().numpy()
+
+    mn1_std = mn_1_prior.std_f(pts).detach().numpy()
+
+    w_inv = np.linalg.inv(w)
+    std1 = np.concatenate([lm1_std, mn1_std], axis=1)
+    std1_al = np.zeros(std1.shape)
+    for i, std_i in enumerate(std1):
+        std1_al[i, :] = np.diag(np.matmul(w_inv.transpose(), np.matmul(np.diag(std_i), w_inv)))
+
+    lm1_std_al = std1_al[:, 0:-1]
+    mn1_std_al = std1_al[:, -1]
+
+    # Now get standard deviations of the model we align to
+    if 'dists' in dir(lm_0_prior):
+        lm0_std = np.concatenate([d.std_f(pts).detach().numpy() for d in lm_0_prior.dists], axis=1)
+    else:
+        lm0_std = lm_0_prior.std_f(pts).detach().numpy()
+
+    mn0_std = mn_0_prior.std_f(pts).detach().numpy()
+
+    # Generate the figure
+    plt.figure()
+    n_int_latent_dims = lm1_mn_al.shape[1]
+    n_rows = 1 + n_int_latent_dims
+
+    def _plot_image(n_rows, n_cols, im_i, im_pts, title_str):
+        ax = plt.subplot(n_rows, n_cols, im_i)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes('right', size='5%', pad=0.05)
+        im = ax.imshow(im_pts.reshape(n_pts_per_dim))
+        plt.colorbar(im, cax=cax, orientation='vertical')
+        ax.set_title(title_str)
+
+    # Generate panels for mean
+    _plot_image(n_rows, 4, 1, mn0_mn, 'Mean 0 Mn')
+    _plot_image(n_rows, 4, 2, mn1_mn_al, 'Mean 1 Mn')
+    _plot_image(n_rows, 4, 3, mn0_std, 'Mean 0 Std')
+    _plot_image(n_rows, 4, 4, mn1_std_al, 'Mean 1 Std')
+
+    # Now generate images for modes
+    cnt = 4
+    for i in range(n_int_latent_dims):
+        # Plot true mapping for loading matrix means for this column of the loading matrix
+        cnt += 1
+        _plot_image(n_rows, 4, cnt, lm0_mn[:, i], 'LM 0:' + str(i) + ' Mn')
+        cnt += 1
+        _plot_image(n_rows, 4, cnt, lm1_mn_al[:, i], 'LM 1:' + str(i) + ' Mn')
+        cnt += 1
+        _plot_image(n_rows, 4, cnt, lm0_std[:, i], 'LM 0:' + str(i) + ' Std')
+        cnt += 1
+        _plot_image(n_rows, 4, cnt, lm1_std_al[:, i], 'LM 1:' + str(i) + ' Std')
 
 class GNLDRMdl(torch.nn.Module):
     """ A nonlinear dimensionality reduction model with Gaussian noise on observed variables.
@@ -1501,7 +1579,7 @@ def generate_simple_prior_collection(n_prop_vars: int, n_intermediate_latent_var
     return PriorCollection(lm_prior=lm_prior, mn_prior=mn_prior, psi_prior=psi_prior, s_prior=s_prior)
 
 
-def generate_hypercube_prior_collection(n_latent_vars: int, hc_params: dict, min_gaussian_std: float = .01,
+def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_params: dict, min_gaussian_std: float = .01,
                                         min_gamma_conc_vl: float = 1.0, min_gamma_rate_vl: float = .01,
                                         lm_mn_init: float = 0.0, lm_std_init: float = .1,
                                         mn_mn_init: float = 0.0, mn_std_init: float = .1,
@@ -1573,7 +1651,7 @@ def generate_hypercube_prior_collection(n_latent_vars: int, hc_params: dict, min
     """
 
     # Generate prior for loadings matrix
-    lm_prior = CondMatrixHypercubePrior(n_cols=n_latent_vars, mn_hc_params=hc_params,
+    lm_prior = CondMatrixHypercubePrior(n_cols=n_intermediate_latent_vars, mn_hc_params=hc_params,
                                         std_hc_params=hc_params, min_std=min_gaussian_std,
                                         mn_init=lm_mn_init, std_init=lm_std_init)
 
