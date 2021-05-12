@@ -1,17 +1,83 @@
 """ Tools for visualizing data and the results of modeling fitting. """
 
-from typing import Callable, Sequence, Union
+from typing import Callable, Optional, Sequence, Union
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import numpy as np
+import torch
 
+from janelia_core.math.basic_functions import bound
 from janelia_core.visualization.image_generation import generate_2d_fcn_image
 from janelia_core.ml.utils import torch_mod_to_fcn
 
 # Define aliases
-OptionalAxes = Union[plt.Axes, None]
-OptionalCallable = Union[Callable, None]
-OptionalMultipleAxes = Union[Sequence[plt.Axes], None]
+OptionalAxes = Optional[plt.Axes]
+OptionalCallable = Optional[Callable]
+OptionalMultipleAxes = Optional[Sequence[plt.Axes]]
+
+
+def assign_colors_to_pts(pts: np.ndarray, lims: np.ndarray) -> np.ndarray:
+    """ Assigns colors to points based on their location.
+
+    This function can work with points in 2-d or 3-d.  The red, blue and green channels of a points color are functions
+    of the first, second and third (if present) coordinates of that point. For each dimension, the user specifies
+    a range of values and color the value of a channel is assigned linearly in that range, saturating at the limits.
+
+    Args:
+
+         pts: The points to assign colors to  of shape n_ps*[2 or 3]
+
+         lims: The limits at which colors should saturate of shape [2 or 3]*2, where lims[i,0] gives the lower
+         limit for dimension i and lims[i,1] gives the upper limit.
+
+    Returns:
+
+        clrs: The assigned colors of shape n_pts*4, where clrs[i,:] is the RGBA color for point i.
+    """
+
+    n_pts, n_dims = pts.shape
+
+    x_lims = lims[0, :]
+    y_lims = lims[1, :]
+    x_range = x_lims[1] - x_lims[0]
+    y_range = y_lims[1] - y_lims[0]
+
+    r_vls = bound((pts[:,0] - x_lims[0])/x_range, lb=0, ub=1)
+    b_vls = bound((pts[:,1] - y_lims[0])/y_range, lb=0, ub=1)
+
+    if n_dims == 3:
+        z_lims = lims[2, :]
+        z_range = z_lims[1] - z_lims[0]
+        g_vls = bound((pts[:, 2] - z_lims[0])/z_range, lb=0, ub=1)
+    else:
+        g_vls = np.zeros(n_pts)
+
+    alpha_vls = np.ones(n_pts)
+
+    return np.stack([r_vls, g_vls, b_vls, alpha_vls]).transpose()
+
+
+def plot_three_dim_pts(pts: Union[torch.Tensor, np.ndarray], a: OptionalAxes = None) -> plt.Axes:
+    """  Plots a 3-d cloud of points.
+
+    Args:
+        pts: The points to plot of shape n_smps*3
+
+    Returns:
+        a: The axes plotted into
+    """
+
+    if isinstance(pts, torch.Tensor):
+        pts = pts.detach().cpu().numpy()
+
+    if a is None:
+        f = plt.figure()
+        a = f.add_subplot(projection='3d')
+
+    a.scatter(pts[:,0], pts[:, 1], pts[:, 2], '.')
+
+    return a
 
 
 def plot_torch_dist(mn_f, std_f, extra_title_str: str = None, axes: OptionalMultipleAxes = None, vis_dim: int = 0):

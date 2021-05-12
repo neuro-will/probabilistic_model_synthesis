@@ -173,3 +173,77 @@ class GammaProductDistribution(CondGammaDistribution):
         self.conc_f[0].f.vl.data = new_alpha
         self.rate_f[0].f.vl.data = new_beta
 
+
+class SampleLatentsGaussianVariationalPosterior(torch.nn.Module):
+    """ Represents the posterior distribution over latent variables for each sample.
+
+    When creating this object, the user needs to specify the number of data points we will be working with.  The
+    object will then be initialized with parameters for the mean for the posterior over the latents for each data
+    point (the covariance for all data points is the same).
+
+    In many applications we may not want the posterior distributions over all data points, so many of the methods
+    of this object ask the user to specify the indices of data points relevant to the underlying computation.
+    """
+
+    def __init__(self, n_latent_vars: int, n_smps: int):
+        """ Creates a new SampleLatentsGaussianVariationalPosterior object.
+
+        Args:
+
+            n_latent_vars: Latent dimensionality
+
+            n_smps: The number of samples we will calculate posteriors over
+
+        """
+        super().__init__()
+
+        self.m = n_latent_vars
+        self.n = n_smps
+
+        self.mns = torch.nn.Parameter(torch.zeros(n_smps, n_latent_vars))
+        self.c = torch.nn.Parameter(torch.diag(torch.ones(n_latent_vars)))
+
+    def cov(self) -> torch.Tensor:
+        """ Returns the covariance matrix for the posterior over any data point. """
+
+        return self.c.mm(self.c.T)
+
+    def kl_btw_standard_normal(self, inds):
+        """ Computes KL divergence between posterior of latent state over a set of data points and the standard normal.
+
+        Args:
+
+            inds: Indices of data points we form the posterior of latent state over.
+
+        Returns:
+
+            kl: The kl divergence for the posterior relative to the standard normal
+        """
+
+        n_kl_data_pts = len(inds)
+
+        cov_m = self.cov()
+
+        cov_trace_sum = n_kl_data_pts * torch.trace(cov_m)
+        m_norm_sum = torch.sum(self.mns[inds] ** 2)
+        m_sum = n_kl_data_pts * self.m
+        log_det_sum = n_kl_data_pts * torch.logdet(cov_m)
+
+        return .5 * (cov_trace_sum + m_norm_sum - m_sum - log_det_sum)
+
+    def sample(self, inds: torch.Tensor) -> torch.Tensor:
+        """ Samples latent values from the posterior for given data points.
+
+        Args:
+
+            inds: The indices of latents to return samples for.  Of type long
+
+        Returns:
+
+            samples: samples[i,:] is the sample for inds[i]
+
+        """
+
+        n_data_pts = len(inds)
+
+        return torch.randn(n_data_pts, self.m, device=self.c.device).mm(self.c.T) + self.mns[inds, :]
