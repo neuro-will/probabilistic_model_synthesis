@@ -332,7 +332,7 @@ class GNLDRMdl(torch.nn.Module):
         if s is None:
             s = self.s
 
-        mns = self.cond_mean(z=z, lm=lm, mn=mn, psi=psi, s=s)
+        mns = self.cond_mean(z=z, lm=lm, mn=mn, s=s)
 
         ll = -.5*torch.sum(((x - mns)**2)/psi, dim=1)
         ll -= .5*torch.sum(torch.log(psi))
@@ -341,7 +341,7 @@ class GNLDRMdl(torch.nn.Module):
         return ll
 
     def cond_mean(self, z: torch.Tensor, lm: OptionalTensor = None, mn: OptionalTensor = None,
-                  psi: OptionalTensor = None, s: OptionalTensor = None) -> torch.Tensor:
+                  s: OptionalTensor = None) -> torch.Tensor:
         """ Computes the mean of observations given latents.
 
            Args:
@@ -350,8 +350,6 @@ class GNLDRMdl(torch.nn.Module):
                lm: If provided, uses this in place of the loading matrix parameter of the model.
 
                mn: If provided, uses this in place of the mean parameter of the model.
-
-               psi: If provided, uses this in place of the psi parameter of the model.
 
                s: If provided, use this in place of the scales parameters of the model.
 
@@ -365,8 +363,6 @@ class GNLDRMdl(torch.nn.Module):
             lm = self.lm
         if mn is None:
             mn = self.mn
-        if psi is None:
-            psi = self.psi
         if s is None:
             s = self.s
 
@@ -409,7 +405,7 @@ class GNLDRMdl(torch.nn.Module):
 
         z = torch.randn(n_smps, self.n_latent_vars)
 
-        x_mn = self.cond_mean(z=z, lm=lm, mn=mn, psi=psi, s=s)
+        x_mn = self.cond_mean(z=z, lm=lm, mn=mn, s=s)
         x_noise = torch.randn(n_smps, n_obs_vars)*torch.sqrt(psi)
         x = x_mn + x_noise
 
@@ -972,7 +968,7 @@ class PosteriorCollection():
         """
 
         return PosteriorCollection(latent_post=cp['latent_post'], lm_post=cp['lm_post'], mn_post=cp['mn_post'],
-                                   psi_post=cp['psi_post'], s=cp['s_post'])
+                                   psi_post=cp['psi_post'], s_post=cp['s_post'])
 
     def generate_checkpoint(self):
         """ Generates a check point of the collection.
@@ -1392,6 +1388,8 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
             psi_kl = 0
         if (not s_point_estimate) and (not skip_s_kl):
             s_kl = torch.sum(posteriors.s_post.kl(d_2=priors.s_prior, x=props, smp=s_compact_smp))
+        else:
+            s_kl = 0
 
         # Calculate elbo for this sample
         elbo += ell - latent_kl - lm_kl - mn_kl - psi_kl - s_kl
@@ -1448,10 +1446,12 @@ def evaluate_check_points(cp_folder: StrOrPath, data: Sequence[torch.Tensor], pr
             # Set the data and properties of the VI collection
             coll_i = VICollection.from_checkpoint(cp=cp['vi_collections'][m_i], data=data[m_i], props=props[m_i])
 
+            n_latent_vars = coll_i.posteriors.latent_post.mns.shape[1]
+
             # Infer latents for the data - here we learn new distributions only on the latent variables, leaving
             # distributions over model parameters untouched
-            coll_i.posteriors.latent_post, _ = infer_latents(vi_collection=coll_i, data=data[m_i], device=device,
-                                                             fit_opts=fit_opts)
+            coll_i.posteriors.latent_post, _ = infer_latents(n_latent_vars=n_latent_vars, vi_collection=coll_i,
+                                                             data=data[m_i], device=device, fit_opts=fit_opts)
 
             # Approximate value of the ELBO
             with torch.no_grad():
@@ -1762,11 +1762,13 @@ def generate_basic_posteriors(n_obs_vars: Sequence[int], n_smps: Sequence[int], 
     return post_collections
 
 
-def infer_latents(vi_collection: VICollection, data: torch.Tensor, fit_opts: dict,
+def infer_latents(n_latent_vars: int, vi_collection: VICollection, data: torch.Tensor, fit_opts: dict,
                   device: torch.device = None) -> Tuple[SampleLatentsGaussianVariationalPosterior, dict]:
     """ Infers latents, leaving posterior and prior distributions over model parameters unchanged.
 
     Args:
+
+        n_latent_vars: The number of latent variables in the model
 
         vi_collection: A VI collection.  Nothing in this VI Colleciton will be changed by calling this function.  This
         is only provided so the function has access to properties as well as posteriors over model parameters.
@@ -1789,7 +1791,6 @@ def infer_latents(vi_collection: VICollection, data: torch.Tensor, fit_opts: dic
         device = [torch.device('cpu')]
 
     n_smps = data.shape[0]
-    n_latent_vars = vi_collection.posteriors.lm_post(vi_collection.props).shape[1]
 
     latent_post = SampleLatentsGaussianVariationalPosterior(n_latent_vars=n_latent_vars, n_smps=n_smps)
 
