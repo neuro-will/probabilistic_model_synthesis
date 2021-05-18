@@ -145,7 +145,37 @@ def compare_mean_and_lm_dists(lm_0_prior: CondVAEDistribution, mn_0_prior: CondV
                               s_0_prior: CondVAEDistribution, lm_1_prior: CondVAEDistribution,
                               mn_1_prior: CondVAEDistribution, s_1_prior: CondVAEDistribution,
                               dim_0_range: Sequence, dim_1_range: Sequence, n_pts_per_dim: Sequence):
-    # Code for function starts here
+    """ Visualizes two sets of conditional distributions over means and loading matrices, aligned to one another.
+
+    The second set of distributions will be aligned to the first.
+
+    Note: The function assumes 2-d conditioning variables.
+
+    Args:
+
+        lm_0_prior: The conditional prior over loading matrices for the first model
+
+        mn_0_prior: The conditional prior over means for the first model
+
+        s_0_prior: The conditional prior over scales for the first model.
+
+        lm_1_prior: The conditional prior over loading matrices for the second model
+
+        mn_1_prior: The conditional prior over means for the second model
+
+        s_1_prior: The conditional prior over scales for the second model.
+
+        dim_0_range: The range of values of the form [start, stop] for the first dimension of conditioning values we
+        view means and standard deviations over.
+
+        dim_1_range: The range of values of the form [start, stop] for the second dimension of conditioning values we
+        view means and standard deviations over.
+
+        n_pts_per_dim: The number of points per dimension of the form [n_dim_1_pts, n_dim_2_pts] we view conditioning
+        values on for each dimension.
+
+    """
+
     pts, dim_pts = list_grid_pts(grid_limits=np.asarray([dim_0_range, dim_1_range]), n_pts_per_dim=n_pts_per_dim)
     pts = torch.tensor(pts)
 
@@ -216,6 +246,7 @@ def compare_mean_and_lm_dists(lm_0_prior: CondVAEDistribution, mn_0_prior: CondV
         _plot_image(n_rows, 4, cnt, lm0_std[:, i], 'LM 0:' + str(i) + ' Std')
         cnt += 1
         _plot_image(n_rows, 4, cnt, lm1_std_al[:, i], 'LM 1:' + str(i) + ' Std')
+
 
 class GNLDRMdl(torch.nn.Module):
     """ A nonlinear dimensionality reduction model with Gaussian noise on observed variables.
@@ -414,8 +445,15 @@ class GNLDRMdl(torch.nn.Module):
     @staticmethod
     def compare_models(m0, m1):
         """ Visually compares two models.
+
+        This function will find a linear transformation that best maps the weights of m1 to those m0 when displaying
+        the weights for m1. Note that a model depending on the form of non-linearity in a model, the weights
+        themselves may not be identifiable, even up to a learn transformation, so users should interpret differences
+        in weights between models with care.
+
         Args:
             m0: The fist model
+
             m1: The second model
         """
 
@@ -486,7 +524,7 @@ class Fitter():
     Alternatively, for some parameters we may wish to learn point estimates alone. In this case, we do not learn a
     prior over these parameters nor posteriors.  Instead, for each model we simply learn a point estimate that
     maximizes the ELBO.  We indicate which parameters to learn posteriors over by setting their value to None in
-    the FA model objects in each VI collection (see below).  If we set their values to some tensor, then the model
+    the model objects in each VI collection (see below).  If we set their values to some tensor, then the model
     will directly optimize these tensors, ignoring the posteriors and priors.  We expect we will treat parameters
     the same, learning them with point estimates or probabilistically, across models.
 
@@ -932,7 +970,7 @@ class PosteriorCollection():
     def __init__(self, latent_post: SampleLatentsGaussianVariationalPosterior, lm_post: OptionalDistribution = None,
                  mn_post: OptionalDistribution = None, psi_post: OptionalDistribution = None,
                  s_post: OptionalDistribution = None):
-        """ Creates a new FAPosteriorCollection.
+        """ Creates a new PosteriorCollection.
 
         Args:
 
@@ -1272,9 +1310,6 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
 
         n_smps: The number of samples to use when calculating the ELBO
 
-        skip_lm_kl: True if KL divergence between the prior and posteriors over loading matrices should not be included
-        in the ELBO
-
         inds: Indices of data points in coll.data that we should compute the ELBO for.  If not provided, all
         data poitns will be used.
 
@@ -1282,6 +1317,9 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
         useful when using mini-batches of data.  For example, if we call approximate_elbo for each minibatch, and in
         each minibatch we use only 25% of the data points, then we need to correct for this by increasing the weight of
         the expected log-liklihood and KL divergence for the latent values by a factor of 4.
+
+        skip_lm_kl: True if KL divergence between the prior and posteriors over loading matrices should not be included
+        in the ELBO
 
         skip_mn_kl: True if KL divergence between the prior and posteriors over means should not be included in the ELBO
 
@@ -1326,10 +1364,10 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
     props = coll.props
     mdl = coll.mdl
 
-    # Approximate ELBO
     if inds is None:
         inds = torch.arange(0, data.shape[0], dtype=torch.int64)
 
+    # Approximate ELBO
     elbo = 0.0
     for s_i in range(n_smps):
 
@@ -1342,7 +1380,7 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
             lm_compact_smp, lm_standard_smp = _sample_posterior(post=posteriors.lm_post, props=props)
         else:
             lm_standard_smp = None  # Passing in None to the appropriate functions will signal we use the
-            # parameter stored in the FA model object
+            # parameter stored in the model object
 
         if not mn_point_estimate:
             mn_compact_smp, mn_standard_smp = _sample_posterior(post=posteriors.mn_post, props=props)
@@ -1622,7 +1660,7 @@ def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_para
         min_gamma_conc_vl: The floor on values that the concentration parameter of the Gamma distributions can take
         on.
 
-        min_gamma_rate_vl: The floor on values that rate parameter of the folded Gamma distributions can take on.
+        min_gamma_rate_vl: The floor on values that rate parameter of the Gamma distributions can take on.
 
         lm_mn_init: The initial value for the mean of distributions over coefficients in the loading matrix. This
         will be a constant value for all conditioning input.
