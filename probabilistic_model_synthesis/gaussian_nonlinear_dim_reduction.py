@@ -26,6 +26,7 @@ from janelia_core.ml.torch_distributions import CondMatrixHypercubePrior
 from janelia_core.ml.torch_distributions import CondVAEDistribution
 from janelia_core.ml.torch_distributions import MatrixGaussianProductDistribution
 from janelia_core.ml.utils import summarize_memory_stats
+from janelia_core.ml.utils import list_torch_devices
 from janelia_core.visualization.matrix_visualization import cmp_n_mats
 from probabilistic_model_synthesis.distributions import CondGammaDistribution
 from probabilistic_model_synthesis.distributions import GammaProductDistribution
@@ -108,31 +109,30 @@ def align_intermediate_spaces(mn0: np.ndarray, lm0: np.ndarray, s0: np.ndarray,
     int_z1 = copy.deepcopy(int_z1)
 
     # Perform alignment of intermediate latent spaces
-    mn0 = mn0 * np.abs(s1)
+    mn0 = mn0 * np.abs(s0)
     lm0 = lm0 * np.abs(np.expand_dims(s0, 1))
     mn1 = mn1 * np.abs(s1)
-    lm1 = lm1 * np.abs(np.expand_dims(s0, 1))
+    lm1 = lm1 * np.abs(np.expand_dims(s1, 1))
 
     m0_conc = np.concatenate([lm0, np.expand_dims(mn0, 1)], axis=1)
     m1_conc = np.concatenate([lm1, np.expand_dims(mn1, 1)], axis=1)
 
     if align_by_params:
-        u_0, s_0, v_0 = numpy.linalg.svd(m0_conc, full_matrices=False)
-        w = np.matmul(v_0.transpose(), np.matmul(np.diag(1/s_0), np.matmul(u_0.transpose(), m1_conc)))
-
+        w = np.linalg.lstsq(m1_conc, m0_conc, rcond=None)
+        w = w[0]
     else:
-
         int_z0_ones = np.concatenate([int_z0, np.ones([int_z1.shape[0], 1])], axis=1)
         int_z1_ones = np.concatenate([int_z1, np.ones([int_z1.shape[0], 1])], axis=1)
-        w = np.linalg.lstsq(int_z1_ones, int_z0_ones, rcond=None)
-        w = w[0].transpose()
+        w = np.linalg.lstsq(int_z0_ones, int_z1_ones, rcond=None)
+        w = w[0]
 
-    m1_conc = np.matmul(m1_conc, np.linalg.inv(w))
+    m1_conc = np.matmul(m1_conc, w)
     lm1 = m1_conc[:, 0:-1]
     mn1 = m1_conc[:, -1]
 
     if int_z1 is not None:
-        int_z1 = np.matmul(np.concatenate([int_z1, np.ones([int_z1.shape[0], 1])], axis=1), w.transpose())
+        int_z1 = np.matmul(np.concatenate([int_z1, np.ones([int_z1.shape[0], 1])], axis=1),
+                           np.linalg.inv(w).transpose())
         int_z1 = int_z1[:, 0:-1]
 
     if int_z1 is not None:
@@ -198,11 +198,10 @@ def compare_mean_and_lm_dists(lm_0_prior: CondVAEDistribution, mn_0_prior: CondV
 
     mn1_std = mn_1_prior.std_f(pts).detach().numpy()
 
-    w_inv = np.linalg.inv(w)
     std1 = np.concatenate([lm1_std, mn1_std], axis=1)
     std1_al = np.zeros(std1.shape)
     for i, std_i in enumerate(std1):
-        std1_al[i, :] = np.diag(np.matmul(w_inv.transpose(), np.matmul(np.diag(std_i), w_inv)))
+        std1_al[i, :] = np.sqrt(np.diag(np.matmul(w.transpose(), np.matmul(np.diag(std_i**2), w))))
 
     lm1_std_al = std1_al[:, 0:-1]
     mn1_std_al = std1_al[:, -1]
@@ -1199,6 +1198,153 @@ class PriorCollection():
         return lm_parameters + mn_parameters + psi_parameters + s_parameters
 
 
+def synthesize_fa_mdls(data: List[torch.Tensor], props: List[torch.Tensor], n_latent_vars: int,
+                       prior_opts: dict, post_opts: dict, sp_fit_opts: Sequence[dict], ip_fit_opts: Sequence[dict],
+                       devices: Sequence[torch.device] = None) -> dict:
+    """ Synthesizes FA models.
+
+    Args:
+
+        data: data[i] is the i^th system to fit models to, and should be of shape n_smps_i*n_obs_vars_i, where both
+        n_smps_i and n_obs_vars_i can vary with i.
+
+        props: props[i] are the properties for system i, and should be of shape n_obs_vars_i*n_props, where n_props
+        must be the same for all i.
+
+        n_latent_vars: The number of latent variables in the FA models.
+
+        prior_opts: A dictionary of options to pass to generate_hypercube_prior_collection, used to setup the priors.
+        See that function for more details.  The only option that should not be provided in this dictionary
+        is n_intermediate_latent_vars, as that is already determined by n_latent_vars.
+
+        post_opts: A dictionary of options to pass to generate_basic_posteriors, used to setup posteriors.  See that
+        function for more details.  The only options that should not be provided in this dictionary are n_obs_vars,
+        n_smps, n_latent_vars and n_intermediate_latent_vars, as these are determined by other inputs to the
+        synthesis function.
+
+        sp_fit_opts: sp_fit_opts[i] is a dictionary of options to provide to the fitter for the i^th round of
+        fitting.  See Fitter.fit() for more details.
+
+        ip_fit_opts: ip_fit_opts[i] is a dictionary of options to provide to the fitter for the i^th round of fitting.
+
+        devices: If provided, devices to use for fitting.  If false, we will search for GPUs, and use all found GPUs
+        for fitting.  If no GPUs are found, fitting will be performed on cpu.
+
+
+    Returns:
+
+        rs: Dictionary of fitting results.  Has the keys 'sp' and 'ip' for the results of fitting with shared (sp)
+        and individual (ip) posteriors.  Each of these keys will have a dictionary with the keys 'vi_collections',
+        'priors' and 'logs' containing the vi_collections, priors and logs.  All results will be returned on cpu.
+
+    """
+
+    if devices is None:
+        devices, _ = list_torch_devices()
+
+    # Do same basic preprocessing and setting up of things here
+    n_systems = len(data)
+
+    ind_n_smps = [data_i.shape[0] for data_i in data]
+    ind_n_vars = [data_i.shape[1] for data_i in data]
+
+    # For FA models, we force the latent and intermediate latent spaces to be the same
+    m_fit = torch.nn.Identity()
+
+    # We can use the same model objects for sp and ip fitting (since the m module is not learned when fitting FA mdls)
+    fit_mdls = [GNLDRMdl(n_latent_vars=n_latent_vars, m=m_fit) for _ in range(n_systems)]
+
+    # ==================================================================================================================
+    # Setup everything for fitting the shared posterior (sp) models
+    # ==================================================================================================================
+
+    sp_priors = generate_hypercube_prior_collection(n_intermediate_latent_vars=n_latent_vars, **prior_opts)
+
+    # Note that even though we create posteriors for all parameters, we only use those for the private variances and
+    # scales, as we will set the posteriors for the loading matrices and means to be equal to the priors.
+    sp_posteriors = generate_basic_posteriors(n_obs_vars=ind_n_vars, n_smps=ind_n_smps, n_latent_vars=n_latent_vars,
+                                              n_intermediate_latent_vars=n_latent_vars, **post_opts)
+
+    # Set the posteriors for the means and loading matrices equal to the posteriors
+    for posts in sp_posteriors:
+        posts.lm_post = sp_priors.lm_prior
+        posts.mn_post = sp_priors.mn_prior
+
+    sp_vi_collections = [VICollection(data=data[i], props=props[i], mdl=fit_mdls[i], posteriors=sp_posteriors[i])
+                         for i in range(n_systems)]
+
+    # ==================================================================================================================
+    # Fit the sp models
+    # ==================================================================================================================
+
+    sp_fitter = Fitter(vi_collections=sp_vi_collections, priors=sp_priors, devices=devices)
+    sp_fitter.distribute(distribute_data=True, devices=devices)
+    sp_logs = [sp_fitter.fit(**opts) for opts in sp_fit_opts]
+    sp_fitter.distribute(devices=[torch.device('cpu')])
+
+    # ==================================================================================================================
+    # Setup everything for fitting the individual posterior (ip) models
+    # ==================================================================================================================
+
+    # We initialize the ip priors to be equal to the sp_priors
+    ip_priors = copy.deepcopy(sp_priors)
+
+    ip_posteriors = generate_basic_posteriors(n_obs_vars=ind_n_vars, n_smps=ind_n_smps, n_latent_vars=n_latent_vars,
+                                              n_intermediate_latent_vars=n_latent_vars, **post_opts)
+
+    # ==================================================================================================================
+    # Initialize the ip posteriors to be equal the priors
+    # ==================================================================================================================
+
+    for i, posts in enumerate(ip_posteriors):
+
+        with torch.no_grad():
+
+            # Initialize the posterior for the mean vectors
+            mn_prior_mn = ip_priors.mn_prior(props[i]).squeeze()
+            mn_prior_std = ip_priors.mn_prior.std_f(props[i]).squeeze()
+
+            posts.mn_post.dists[0].mn_f.f.vl.data = copy.deepcopy(mn_prior_mn)
+            posts.mn_post.dists[0].std_f.f.set_value(copy.deepcopy(mn_prior_std.numpy()))
+
+            # Initialize the posterior for the loading matrices
+            for d_i in range(n_latent_vars):
+                lm_prior_mn = ip_priors.lm_prior.dists[d_i](props[i]).squeeze()
+                lm_prior_std = ip_priors.lm_prior.dists[d_i].std_f(props[i]).squeeze()
+
+                posts.lm_post.dists[d_i].mn_f.f.vl.data = copy.deepcopy(lm_prior_mn)
+                posts.lm_post.dists[d_i].std_f.f.set_value(copy.deepcopy(lm_prior_std.numpy()))
+
+        # Initialize the posteriors for the private variances, scales and latents
+        posts.psi_post = copy.deepcopy(sp_posteriors[i].psi_post)
+        posts.s_post = copy.deepcopy(sp_posteriors[i].s_post)
+        posts.latent_post = copy.deepcopy(sp_posteriors[i].latent_post)
+
+    # ==================================================================================================================
+    # Finish packaging everything for ip fitting
+    # ==================================================================================================================
+
+    ip_vi_collections = [VICollection(data=data[i], props=props[i], mdl=fit_mdls[i], posteriors=ip_posteriors[i])
+                         for i in range(n_systems)]
+
+    # ==================================================================================================================
+    # Fit the ip models
+    # ==================================================================================================================
+
+    ip_fitter = Fitter(vi_collections=ip_vi_collections, priors=ip_priors)
+    ip_fitter.distribute(devices=devices)
+    ip_logs = [ip_fitter.fit(**opts) for opts in ip_fit_opts]
+    ip_fitter.distribute(devices=[torch.device('cpu')])
+
+    # ==================================================================================================================
+    # Package and return results
+    # ==================================================================================================================
+    sp_rs = {'vi_collections': sp_vi_collections, 'priors': sp_priors, 'logs': sp_logs}
+    ip_rs = {'vi_collections': ip_vi_collections, 'priors': ip_priors, 'logs': ip_logs}
+
+    return {'sp': sp_rs, 'ip': ip_rs}
+
+
 class VICollection():
     """ A collection of objects necessary for fitting one GNLDR model with variational inference.
 
@@ -1589,6 +1735,7 @@ def generate_simple_prior_collection(n_prop_vars: int, n_intermediate_latent_var
     mn_std_f = torch.nn.Sequential(torch.nn.Linear(in_features=n_prop_vars, out_features=1, bias=True),
                                    FixedOffsetAbs(o=min_gaussian_std))
 
+    # Generate prior for mean vector
     torch.nn.init.normal_(mn_mn_f.weight, mean=0.0, std=mn_mn_w_init_std)
     torch.nn.init.normal_(mn_mn_f.bias, mean=0.0, std=mn_mn_w_init_std)
     torch.nn.init.normal_(mn_std_f[0].weight, mean=0.0, std=mn_std_w_init_std)

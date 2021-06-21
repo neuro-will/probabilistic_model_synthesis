@@ -15,10 +15,14 @@ import numpy.linalg
 import torch
 
 from janelia_core.math.basic_functions import list_grid_pts
+from janelia_core.ml.extra_torch_modules import DenseLNLNet
+from janelia_core.ml.extra_torch_modules import FixedOffsetAbs
 from janelia_core.ml.torch_distributions import CondVAEDistribution
+from janelia_core.ml.torch_distributions import CondGaussianDistribution
 from janelia_core.ml.torch_distributions import CondMatrixHypercubePrior
 from janelia_core.ml.torch_distributions import MatrixGammaProductDistribution
 from janelia_core.ml.torch_distributions import MatrixGaussianProductDistribution
+from janelia_core.ml.utils import list_torch_devices
 from janelia_core.ml.utils import summarize_memory_stats
 from janelia_core.visualization.matrix_visualization import cmp_n_mats
 
@@ -37,41 +41,41 @@ OptionalTensor = Optional[torch.Tensor]
 StrOrPath = Union[pathlib.Path, str]
 
 
-def align_low_d_spaces(w0: np.ndarray, s_in_0: np.ndarray, b_in_0: np.ndarray,
-                              w1: np.ndarray, s_in_1: np.ndarray, b_in_1: np.ndarray,
-                              z0: Optional[np.ndarray] = None, z1: Optional[np.ndarray] = None) -> Tuple[np.ndarray]:
+def align_low_d_spaces(w_0: np.ndarray, s_in_0: np.ndarray, b_in_0: np.ndarray,
+                              w_1: np.ndarray, s_in_1: np.ndarray, b_in_1: np.ndarray,
+                              z_0: Optional[np.ndarray] = None, z_1: Optional[np.ndarray] = None) -> Tuple[np.ndarray]:
     """
     Aligns the low-d spaces of two models.
 
     Args:
 
-        w0: The weights from model 0
+        w_0: The weights from model 0
 
-        w1: The weights from model 1
+        w_1: The weights from model 1
 
-        s0: The s_in parameter from model 0
+        s_in_0: The s_in parameter from model 0
 
-        s1: The s_in parameter from model 1
+        s_in_1: The s_in parameter from model 1
 
-        b0: The b_in parameter from model 0
+        b_in_0: The b_in parameter from model 0
 
-        b1: The b_in parameter from model 0
+        b_in1: The b_in parameter from model 0
 
-        z0: Low-d projections of data from model 0.  This should be after input scales and biases are applied.
+        z_0: Low-d projections of data from model 0.  This should be after input scales and biases are applied.
 
-        z1: Low-d projections of data from model 1.  This should be after input scales and biases are applied.
+        z_1: Low-d projections of data from model 1.  This should be after input scales and biases are applied.
 
     """
 
     # Get aligned parameters for model 1
     b1_aligned = b_in_0
     s1_aligned = s_in_0
-    t = numpy.linalg.lstsq(w1, w0, rcond=None)
-    w1_aligned = np.matmul(w0, t[0])
+    t = numpy.linalg.lstsq(w_1, w_0, rcond=None)
+    w1_aligned = np.matmul(w_0, t[0])
 
     # Get latents for aligned model 1
-    if z1 is not None:
-        z1_rev = (z1 - b_in_1)/s_in_1  # Remove biases and scales from model 1 projections
+    if z_1 is not None:
+        z1_rev = (z_1 - b_in_1)/s_in_1  # Remove biases and scales from model 1 projections
         z1_aligned = s1_aligned*np.matmul(z1_rev, t[0]) + b1_aligned
         return b1_aligned, s1_aligned, w1_aligned, t[0], z1_aligned
     else:
@@ -158,7 +162,7 @@ def approximate_elbo(coll: 'VICollection', priors: 'PriorCollection', n_smps: in
     mdl = coll.mdl
 
     if inds is None:
-        inds = torch.arange(0, data.shape[0], dtype=torch.int64)
+        inds = torch.arange(0, data[0].shape[0], dtype=torch.int64)
 
     # Approximate elbo
     elbo = 0.0
@@ -247,7 +251,6 @@ def approximate_elbo(coll: 'VICollection', priors: 'PriorCollection', n_smps: in
 
         # Calculate elbo for this sample
         elbo += ell - w_kl - s_in_kl - b_in_kl - s_out_kl - b_out_kl - psi_kl
-        # Calculate elbo for this sample
 
     elbo = elbo/n_smps
 
@@ -284,10 +287,11 @@ def compare_weight_prior_dists(w0_prior: CondVAEDistribution, w1_prior: CondVAED
     """
     # Code for function starts here
     pts, dim_pts = list_grid_pts(grid_limits=np.asarray([dim_0_range, dim_1_range]), n_pts_per_dim=n_pts_per_dim)
-    pts = torch.tensor(pts)
+    pts = torch.tensor(pts, dtype=torch.float)
 
     w0_mn = w0_prior(pts).detach().cpu().numpy()
     w1_mn = w1_prior(pts).detach().cpu().numpy()
+
 
     # Now get standard deviations
     if 'dists' in dir(w0_prior):
@@ -301,12 +305,21 @@ def compare_weight_prior_dists(w0_prior: CondVAEDistribution, w1_prior: CondVAED
         w1_std = w1_prior.std_f(pts).detach().cpu().numpy()
 
     # Align mean and standard deviations of distribution 1 to 2
-    t = numpy.linalg.lstsq(w1_mn, w0_mn, rcond=None)
-    w1_mn_al = np.matmul(w1_mn, t[0])
+    # t = numpy.linalg.lstsq(w1_mn, w0_mn, rcond=None)
+    # print(t[0])
+    #w1_mn_al = np.matmul(w1_mn, t[0])
+
+    w1_mn_supp = np.concatenate([w1_mn, np.ones([w1_mn.shape[0], 1])], axis=1)
+    t = numpy.linalg.lstsq(w1_mn_supp, w0_mn, rcond=None)
+    t = t[0]
+    w1_mn_al = np.matmul(w1_mn_supp, t)
+    t_std = t[0:-1, :]
 
     w1_std_al = np.zeros(w1_std.shape)
     for i, std_i in enumerate(w1_std):
-        w1_std_al[i, :] = np.diag(np.matmul(t[0].transpose(), np.matmul(np.diag(std_i), t[0])))
+        covar_i = np.diag(std_i**2)
+        covar_i_t = np.matmul(t_std.transpose(), np.matmul(covar_i, t_std))
+        w1_std_al[i, :] = np.sqrt(np.diag(covar_i_t))
 
     # Generate the figure
     plt.figure()
@@ -315,7 +328,7 @@ def compare_weight_prior_dists(w0_prior: CondVAEDistribution, w1_prior: CondVAED
         ax = plt.subplot(n_rows, n_cols, im_i)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='5%', pad=0.05)
-        im = ax.imshow(im_pts.reshape(n_pts_per_dim))
+        im = ax.imshow(im_pts.reshape(n_pts_per_dim), vmin=None, vmax=None, origin='lower')
         plt.colorbar(im, cax=cax, orientation='vertical')
         ax.set_title(title_str)
 
@@ -911,22 +924,23 @@ class GNLRMdl(torch.nn.Module):
             subplot.axis('equal')
             subplot.title = plt.title(title)
 
-        w_0 = m0.w.detach().cpu().numpy().squeeze()
-        w_1 = m1.w.detach().cpu().numpy().squeeze()
-        s_in_0 = m0.s_in.detach().cpu().numpy().squeeze()
-        s_in_1 = m1.s_in.detach().cpu().numpy().squeeze()
-        b_in_0 = m0.b_in.detach().cpu().numpy().squeeze()
-        b_in_1 = m1.b_in.detach().cpu().numpy().squeeze()
-        s_out_0 = m0.s_out.detach().cpu().numpy().squeeze()
-        s_out_1 = m1.s_out.detach().cpu().numpy().squeeze()
-        b_out_0 = m0.b_out.detach().cpu().numpy().squeeze()
-        b_out_1 = m1.b_out.detach().cpu().numpy().squeeze()
-        psi_0 = m0.psi.detach().cpu().numpy().squeeze()
-        psi_1 = m1.psi.detach().cpu().numpy().squeeze()
+        w_0 = m0.w.detach().cpu().numpy()
+        w_1 = m1.w.detach().cpu().numpy()
+        s_in_0 = m0.s_in.detach().cpu().numpy()
+        s_in_1 = m1.s_in.detach().cpu().numpy()
+        b_in_0 = m0.b_in.detach().cpu().numpy()
+        b_in_1 = m1.b_in.detach().cpu().numpy()
+        s_out_0 = m0.s_out.detach().cpu().numpy()
+        s_out_1 = m1.s_out.detach().cpu().numpy()
+        b_out_0 = m0.b_out.detach().cpu().numpy()
+        b_out_1 = m1.b_out.detach().cpu().numpy()
+        psi_0 = m0.psi.detach().cpu().numpy()
+        psi_1 = m1.psi.detach().cpu().numpy()
 
         # Align w_1 to w_0
         t = numpy.linalg.lstsq(w_1, w_0, rcond=None)
         w_1_aligned = np.matmul(w_1, t[0])
+        print(t[0])
 
         # Make plots of scalar variables
         _make_subplot([0, 0], 3, 3, s_in_0, s_in_1, 's_in')
@@ -984,7 +998,7 @@ class GNLRMdl(torch.nn.Module):
         if s_in is None:
             s_in = self.s_in
         if s_out is None:
-            s_out = self.w_out
+            s_out = self.s_out
         if b_out is None:
             b_out = self.b_out
         if psi is None:
@@ -1114,6 +1128,211 @@ class GNLRMdl(torch.nn.Module):
         return mns + noise
 
 
+def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Sequence[torch.Tensor], p: int,
+                              w_prior_opts: dict, s_in_prior_opts: dict, b_in_prior_opts: dict,
+                              s_out_prior_opts: dict, b_out_prior_opts: dict, psi_prior_opts: dict,
+                              s_in_post_opts: dict, b_in_post_opts: dict, s_out_post_opts: dict,
+                              b_out_post_opts: dict, psi_post_opts: dict, dense_net_opts: dict,
+                              sp_fit_opts: Sequence[dict], ip_fit_opts: Sequence[dict]) -> dict:
+    """ Wrapper function to setup models and fit them to data for multiple systems using hypercube priors over weights.
+
+    Args:
+
+        data: The data for each system (e.g. individual).  Each entry is of the form [input_vars, predicted_vars],
+        where input_vars is of shape n_smp*n_input_vars and predicted variables is of shape n_smps*n_predicted_vars.
+
+        props: The properties for each system.  Each entry is of shape n_input_vars*n_props
+
+        p: The dimensionality of the intermediate low-d space we project input variables down into
+
+        w_prior_opts: Options to provide to generate_hypercube_prior_collection for generating the prior on the weights
+
+        s_in_prior_opts: Options to provide to generate_hypercube_prior_collection for generating the prior on
+        the s_in parameters
+
+        b_in_prior_opts: Options to provide to generate_hypercube_prior_collection for generating the prior on
+        the b_in parameters
+
+        s_out_prior_opts: Options to provide to generate_hypercube_prior_collection for generating the prior on
+        the s_out parameters
+
+        b_out_prior_opts: Options to provide to generate_hypercube_prior_collection for generating the prior on
+        the b_out parameters
+
+        psi_prior_opts: options to provide to generate_hypercube_prior_collection for generating the prior on
+        the psi parameters
+
+        s_in_post_opts: options to provide to generate_basic_posteriors for generating posteriors over
+        the s_in parameters.
+
+        b_in_post_opts: options to provide to generate_basic_posteriors for generating posteriors over
+        the b_in parameters.
+
+        s_out_post_opts: options to provide to generate_basic_posteriors for generating posteriors over
+        the s_out parameters.
+
+        b_out_post_opts: options to provide to generate_basic_posteriors for generating posteriors over
+        the b_out parameters.
+
+        psi_post_opts: options to provide to generate_basic_posteriors for generating posteriors over
+        the psi parameters.
+
+        dense_net_opts: Dictionary of options for setting up the dense net of the m module in the regression models.
+        Should have the entries, 'n_layers', 'growth_rate' and 'bias'.
+
+        sp_fit_opts: sp_fit_opts[i] are the options to the call to fit for the i^th round of fitting shared-posterior
+        models
+
+        ip_fit_opts: ip_fit_opts[i] are the options to the call to fit for the i^th round of fitting
+        individual-posterior models
+
+    Returns: Results of the fitting.  This will be a dictionary with entires 'sp' and 'ip' containing results of
+    fitting the shared and individual posterior models respectively.  Each will itself be a dictionary with the
+    keys 'vi_collections', 'priors' and 'logs' holding the fit vi collections, priors and fitting logs.
+
+    """
+
+    n_systems = len(data)
+    n_pred_vars = data[0][1].shape[1]
+    ind_n_vars = [d[0].shape[1] for d in data]
+    n_props = props[0].shape[1]
+
+    # ==================================================================================================================
+    # See which devices are available for fitting
+    # ==================================================================================================================
+    devices, _ = list_torch_devices()
+
+    # ==================================================================================================================
+    # Create distributions and models for sp fitting
+    # ==================================================================================================================
+
+    # Setup the shared m-module
+    sp_m = torch.nn.Sequential(DenseLNLNet(nl_class=torch.nn.ReLU,
+                                           d_in=p,
+                                           n_layers=dense_net_opts['n_layers'],
+                                           growth_rate=dense_net_opts['growth_rate'],
+                                           bias=dense_net_opts['bias']),
+                               torch.nn.Linear(in_features=p+dense_net_opts['n_layers']*dense_net_opts['growth_rate'],
+                                               out_features=n_pred_vars,
+                                               bias=True))
+
+    # Setup the priors
+    sp_priors = generate_hypercube_prior_collection(p=p, d_pred=n_pred_vars, w_prior_opts=w_prior_opts,
+                                                    s_in_prior_opts=s_in_prior_opts, b_in_prior_opts=b_in_prior_opts,
+                                                    s_out_prior_opts=s_out_prior_opts,
+                                                    b_out_prior_opts=b_out_prior_opts, psi_prior_opts=psi_prior_opts,
+                                                    learnable_scales_and_biases=False)
+
+    # Setup the posteriors
+    sp_posteriors = generate_basic_posteriors(n_input_vars=ind_n_vars, p=p, n_pred_vars=n_pred_vars,
+                                              s_in_opts=s_in_post_opts, b_in_opts=b_in_post_opts,
+                                              s_out_opts=s_out_post_opts, b_out_opts=b_out_post_opts,
+                                              psi_opts=psi_post_opts)
+
+    # Setup the model objects
+    sp_mdls = [GNLRMdl(m=sp_m) for s in range(n_systems)]
+
+    # ==================================================================================================================
+    # Tie posteriors for weights together
+    # ==================================================================================================================
+    for posteriors in sp_posteriors:
+        posteriors.w_post = sp_priors.w_prior
+
+    # ==================================================================================================================
+    # Setup the vi collections
+    # ==================================================================================================================
+    sp_vi_collections = [VICollection(data=[data[s][0], data[s][1]], props=props[s], mdl=sp_mdls[s],
+                                      posteriors=sp_posteriors[s])
+                         for s in range(n_systems)]
+
+    # ==================================================================================================================
+    # Perform sp fitting
+    # ==================================================================================================================
+    print('Beginning SP fitting.')
+    sp_fitter = Fitter(vi_collections=sp_vi_collections, priors=sp_priors, devices=devices)
+
+    sp_fitter.distribute(distribute_data=True, devices=devices)
+    sp_logs = [sp_fitter.fit(skip_w_kl=True, **fit_opts) for fit_opts in sp_fit_opts]
+    sp_fitter.distribute(distribute_data=True, devices=[torch.device('cpu')])
+
+    # ==================================================================================================================
+    # Create distributions and models for ip fitting
+    # ==================================================================================================================
+
+    # We initialize the shared-m module for ip training to that we learned in sp training
+    ip_m = copy.deepcopy(sp_m)
+
+    # We initialize the priors for ip training to those we learned in sp training
+    ip_priors = copy.deepcopy(sp_priors)
+
+    # Create the posteriors for ip training, we will initialize these later
+    ip_posteriors = generate_basic_posteriors(n_input_vars=ind_n_vars, p=p, n_pred_vars=n_pred_vars,
+                                              s_in_opts=s_in_post_opts, b_in_opts=b_in_post_opts,
+                                              s_out_opts=s_out_post_opts, b_out_opts=b_out_post_opts,
+                                              psi_opts=psi_post_opts)
+
+    # Create model objects
+    ip_mdls = [GNLRMdl(m=ip_m) for s in range(n_systems)]
+
+    # ==================================================================================================================
+    # Initialize the posteriors for the ip models with sp solutions
+    # ==================================================================================================================
+    for s in range(n_systems):
+        # We can just copy over distributions for scales and biases b/c these were fit individually in the sp fitting
+        ip_posteriors[s] = PosteriorCollection(w_post=ip_posteriors[s].w_post,
+                                               s_in_post=copy.deepcopy(sp_posteriors[s].s_in_post),
+                                               b_in_post=copy.deepcopy(sp_posteriors[s].b_in_post),
+                                               s_out_post=copy.deepcopy(sp_posteriors[s].s_out_post),
+                                               b_out_post=copy.deepcopy(sp_posteriors[s].b_out_post),
+                                               psi_post=copy.deepcopy(sp_posteriors[s].psi_post))
+
+        # Here we make the initial posteriors for the weights equal to the initial prior for each individual
+        if 'dists' in dir(sp_priors.w_prior):
+            with torch.no_grad():
+                for d_i in range(p):
+                    cur_mn = sp_priors.w_prior.dists[d_i](props[s]).squeeze()
+                    cur_std = sp_priors.w_prior.dists[d_i].std_f(props[s]).squeeze().numpy()
+                    ip_posteriors[s].w_post.dists[d_i].mn_f.f.vl.data = copy.deepcopy(cur_mn)
+                    ip_posteriors[s].w_post.dists[d_i].std_f.f.set_value(copy.deepcopy(cur_std))
+        else:
+            with torch.no_grad():
+                cur_mn = sp_priors.w_prior(props[s])
+                cur_std = sp_priors.w_prior.std_f(props[s])
+                for d_i in range(p):
+                    ip_posteriors[s].w_post.dists[d_i].mn_f.f.vl.data = copy.deepcopy(cur_mn[:, d_i])
+                    ip_posteriors[s].w_post.dists[d_i].std_f.f.set_value(copy.deepcopy(cur_std[:, d_i].squeeze().numpy()))
+
+
+
+        # Here we reset the std of the ip prior
+        #ip_priors.w_prior.set_std(w_prior_opts['std_init'])
+
+    # ==================================================================================================================
+    # Setup the vi collections
+    # ==================================================================================================================
+    ip_vi_collections = [VICollection(data=[data[s][0], data[s][1]], props=props[s], mdl=ip_mdls[s],
+                                      posteriors=ip_posteriors[s])
+                         for s in range(n_systems)]
+
+    # ==================================================================================================================
+    # Perform sp fitting
+    # ==================================================================================================================
+    print('Beginning IP fitting.')
+    ip_fitter = Fitter(vi_collections=ip_vi_collections, priors=ip_priors, devices=devices)
+
+    ip_fitter.distribute(distribute_data=True, devices=devices)
+    ip_logs = [ip_fitter.fit(**fit_opts) for fit_opts in ip_fit_opts]
+    ip_fitter.distribute(distribute_data=True, devices=[torch.device('cpu')])
+
+    # ==================================================================================================================
+    # Return output
+    # ==================================================================================================================
+    sp_rs = {'vi_collections': sp_vi_collections, 'priors': sp_priors, 'logs': sp_logs}
+    ip_rs = {'vi_collections': ip_vi_collections, 'priors': ip_priors, 'logs': ip_logs}
+
+    return {'sp': sp_rs, 'ip': ip_rs}
+
+
 def generate_basic_posteriors(n_input_vars: Sequence[int], p: int, n_pred_vars: int, w_opts: OptionalDict = None,
                               s_in_opts: OptionalDict = None, b_in_opts: OptionalDict = None,
                               s_out_opts: OptionalDict = None, b_out_opts: OptionalDict = None,
@@ -1190,12 +1409,9 @@ def generate_basic_posteriors(n_input_vars: Sequence[int], p: int, n_pred_vars: 
     return post_collections
 
 
-def generate_hypercube_prior_collection(p: int, d_pred: int, hc_params: dict, min_w_std: float = .0001,
-                                        w_mn_init: float = 0.0, w_std_init: float = .1,
-                                        s_in_prior_opts: Optional[dict] = None, b_in_prior_opts: Optional[dict] = None,
-                                        s_out_prior_opts: Optional[dict] = None,
-                                        b_out_prior_opts: Optional[dict] = None,
-                                        psi_prior_opts: Optional[dict] = None,
+def generate_hypercube_prior_collection(p: int, d_pred: int, w_prior_opts: dict, s_in_prior_opts: Optional[dict] = None,
+                                        b_in_prior_opts: Optional[dict] = None, s_out_prior_opts: Optional[dict] = None,
+                                        b_out_prior_opts: Optional[dict] = None, psi_prior_opts: Optional[dict] = None,
                                         learnable_scales_and_biases: bool = True) -> 'PriorCollection':
     """ Generates conditional priors where sums of hypercube functions of properties predict mn and std of weights.
 
@@ -1221,16 +1437,9 @@ def generate_hypercube_prior_collection(p: int, d_pred: int, hc_params: dict, mi
 
         d_pred: The number of predicted variables.
 
-        hc_params: The parameters to pass to SumOfTiledHyperCubeBasisFcns when creating the sum of tiled
-        hyper cube basis functions objects.
-
-        min_w_std: The floor on the standard deviation for the distributions on weights.
-
-        w_mn_init: The initial value for the mean of distributions over weights. This will be a constant value for all
-        conditioning input.
-
-        w_std_init: The initial value for the standard deviation of distributions over weights. This will be a constant
-        value for all conditioning input.
+        w_prior_opts: Options to pass to CondMatrixHypercubePrior.  This must contain the keys, mn_hc_params,
+        std_hc_params and min_std.  It should not contain n_cols, which will be determined by p.
+        See CondMatrixHypercubePrior for more details.
 
         s_in_prior_opts: Options to pass MatrixGaussianProductDistribution when generating the prior for the s_in
         parameters.  All options can be passed except for shape, which is determined by p.
@@ -1244,7 +1453,11 @@ def generate_hypercube_prior_collection(p: int, d_pred: int, hc_params: dict, mi
         b_out_prior_opts: Options to pass MatrixGaussianProductDistribution when generating the prior for the b_out
         parameters.  All options can be passed except for shape, which is determined by d_pred.
 
+        psi_prior_opts: Options to pass to MatrixGammaProductDistribution when generating the prior for the psi
+        parameters.  All options can be passed except for shape, which is determined by d_pred.
+
         learnable_scales_and_biases: True if priors on scales and biases (both in and out) should be learnable.
+
 
     Returns:
 
@@ -1263,8 +1476,7 @@ def generate_hypercube_prior_collection(p: int, d_pred: int, hc_params: dict, mi
         psi_prior_opts = dict()
 
     # Generate prior for weights
-    w_prior = CondMatrixHypercubePrior(n_cols=p, mn_hc_params=hc_params, std_hc_params=hc_params, min_std=min_w_std,
-                                       mn_init=w_mn_init, std_init=w_std_init)
+    w_prior = CondMatrixHypercubePrior(n_cols=p, **w_prior_opts)
 
     # Generate prior for s_in
     s_in_prior = MatrixGaussianProductDistribution(shape=[p, 1], **s_in_prior_opts)
@@ -1510,7 +1722,8 @@ class VICollection():
 
      """
 
-    def __init__(self, data: List[torch.Tensor], props: torch.Tensor, mdl: GNLRMdl, posteriors: PosteriorCollection):
+    def __init__(self, data: List[torch.Tensor], props: torch.Tensor, mdl: GNLRMdl,
+                 posteriors: PosteriorCollection):
         """ Creates a new VICollection object.
 
         Args:
@@ -1582,7 +1795,6 @@ class VICollection():
             move_data: True if data should be moved as well.
 
         """
-
         if move_data:
             self.data[0] = self.data[0].to(device)
             self.data[1] = self.data[1].to(device)
