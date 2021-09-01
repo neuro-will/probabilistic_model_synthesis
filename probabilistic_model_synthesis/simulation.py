@@ -1,7 +1,7 @@
 """ Tools for simulating data for testing and developing models. """
 
 import math
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -159,6 +159,137 @@ def sample_proj_data_from_interval(n_smps: np.ndarray, w: np.ndarray, interval: 
 
     return smps
 
+
+def cone_and_projected_interval_sample(n_smps: int, locs: np.ndarray, ctr: np.ndarray, ang_range: Sequence[float],
+                                       w: np.ndarray, interval: Sequence[float], big_std: float,
+                                       small_std: float) -> np.ndarray:
+    """ Samples variables in space so those within a arc have larger values and projected data falls in a interval.
+
+    Args:
+
+        n_smps: The number of samples to generate
+
+        locs: The locations of variables in space, of shape n_smps*2
+
+        ctr: The position of the origin for defining arcs in space
+
+        ang_range: Variables within an arc defined by (ang_range[0], ang_range[1]) will be sampled with larger
+        variances while those outside will be sampled with smaller variances.  Units should be in radians betweein
+
+
+        w: The vector to use when projecting data, of shape n_smps
+
+        interval: The interval that projected values should fall within.  Values in the range [interval[0], interval[1])
+        will be accepted.
+
+        big_std: The standard deviation of variables within the arc
+
+        small_std: The standard deviation of variables outside of the arc
+
+    Returns:
+
+        smps: Samples of shape n_smps*d_x.
+
+    """
+
+    w = w.squeeze()  # Make sure w is just a vector
+
+    # Determine which variables are within the arc and which are outside
+    loc_centered = locs - ctr
+    angs = np.asarray([math.atan2(v[0], v[1]) for v in loc_centered])
+    angs[angs < 0] += 2*np.pi
+    big_vars = np.logical_and(angs >= ang_range[0], angs < ang_range[1])
+    small_vars = np.logical_not(big_vars)
+
+    print('n_big_vars: ' + str(np.sum(big_vars)))
+    print('n_small_vars: ' + str(np.sum(small_vars)))
+
+    # Generate samples here
+    raw_dim = len(w)
+    smps = np.zeros([n_smps, raw_dim])
+    smps[:] = np.nan
+
+    n_accepted_smps = 0
+    while n_accepted_smps < n_smps:
+        # Determine which samples we still need to fill in
+        needed_smps = np.argwhere(np.isnan(smps[:, 0])).squeeze(axis=1)
+        n_needed_smps = len(needed_smps)
+
+        cand_smps = np.random.randn(n_needed_smps, raw_dim)
+        cand_smps[:, big_vars] = big_std*cand_smps[:, big_vars]
+        cand_smps[:, small_vars] = small_std*cand_smps[:, small_vars]
+        cand_projs = np.sum(cand_smps*w, 1)
+        keep_smps = np.argwhere(np.logical_and(cand_projs >= interval[0], cand_projs < interval[1])).squeeze(axis=1)
+        n_keep_smps = len(keep_smps)
+
+        smps[needed_smps[0:n_keep_smps], :] = cand_smps[keep_smps, :]
+        n_accepted_smps = np.sum(np.logical_not(np.isnan(smps[:, 0])))
+
+    print('Changed 7')
+    return smps
+
+
+def ss_sample_within_projected_interval(n_smps: int, w: np.ndarray, u: np.ndarray,
+                                        interval: Sequence[float]) -> np.ndarray:
+    """ Randomly generates data in a high-d subspace that when projected along a vectors falls within given bounds.
+
+    Specifically, this function generates samples z_t, x_t such that
+
+        z_t ~ N(0, I), z_i \in R^m
+
+        w'U z_t \in [l, u), U \in R^{n \times m}, w \in R^n
+
+        x_t = U z_t
+
+        where l and u and lower and bounds.
+
+    Args:
+
+        n_smps: The number of samples to generate
+
+        w: The vector to project x_t along
+
+        U: The matrix defining the subspace to generate x_t samples in.
+
+        interval: interval[0] is the lower bound and interval[1] is upper bound projected samples should fall within.
+
+    Returns:
+
+        x: The random samples x of shape n_smps*d_x
+
+        z: The random z values that generated each sample of shape n_smps*d_z
+
+    """
+    w = w.squeeze() # Make sure w is just a vector
+
+    latent_dim = u.shape[1]
+    raw_dim = len(w)
+    smps = np.zeros([n_smps, raw_dim])
+    smps_z = np.zeros([n_smps, latent_dim])
+    smps[:] = np.nan
+
+    u_t = u.transpose()
+
+    n_accepted_smps = 0
+    while n_accepted_smps < n_smps:
+        # Determine which samples we still need to fill in
+        needed_smps = np.argwhere(np.isnan(smps[:, 0])).squeeze(axis=1)
+        n_needed_smps = len(needed_smps)
+
+        cand_z = np.random.randn(n_needed_smps, latent_dim)
+        cand_smps = np.matmul(cand_z, u_t)
+        cand_projs = np.sum(cand_smps*w, 1)
+        keep_smps = np.argwhere(np.logical_and(cand_projs >= interval[0], cand_projs < interval[1])).squeeze(axis=1)
+        n_keep_smps = len(keep_smps)
+
+        smps[needed_smps[0:n_keep_smps], :] = cand_smps[keep_smps, :]
+        smps_z[needed_smps[0:n_keep_smps], :] = cand_z[keep_smps, :]
+
+        n_accepted_smps = np.sum(np.logical_not(np.isnan(smps[:, 0])))
+
+    return smps, smps_z
+
+
 class QuadrantFcn(torch.nn.Module):
     """ Represents a 2-d function where the behavior in different quadrants of input space differs.
 
@@ -223,3 +354,50 @@ class QuadXOR(torch.nn.Module):
         xor = torch.logical_xor(x[:, 0] > self.ctr[0], x[:, 1] > self.ctr[1])
         z = torch.sum(self.coefs*((x - self.ctr)**2), dim=1)
         return (xor*z).unsqueeze(-1)
+
+
+def calc_mean_and_std_in_grid(locs: np.ndarray, vls: np.ndarray, grid_dims: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """ Calculates the mean and standard deviations of values associated with points in differents parts of a grid.
+
+    Args:
+
+        locs: The location of each point, of shape n_pts*2
+
+        vls: The values of each point, of length n_pts
+
+        grid_dims: The dimensions of the grid.  grid_dims[i,:] is the dimensions for dimension i and is of
+        the form (start_vl, stop_vl, step_size).
+
+    Returns:
+
+        mns: Provides the mean in each grid division.  The first dimension corresponds to the first dimension of
+        grid_dims, and the second the second.
+
+        stds: Provides the standard deviation in each grid division.
+    """
+
+    div_0 = np.arange(*grid_dims[0, :])
+    div_1 = np.arange(*grid_dims[1, :])
+
+    n_div_0 = len(div_0) - 1
+    n_div_1 = len(div_0) - 1
+
+    mns = np.zeros([n_div_0, n_div_1])
+    stds = np.zeros([n_div_0, n_div_1])
+    mns[:] = np.nan
+    stds[:] = np.nan
+
+    for i_0 in range(n_div_0):
+        div_0_lb = div_0[i_0]
+        div_0_ub = div_0[i_0 + 1]
+        div_0_pts = np.logical_and(locs[:, 0] >= div_0_lb, locs[:, 0] < div_0_ub)
+        for i_1 in range(n_div_1):
+            div_1_lb = div_1[i_1]
+            div_1_ub = div_1[i_1 + 1]
+            div_1_pts = np.logical_and(locs[:, 1] >= div_1_lb, locs[:, 1] < div_1_ub)
+            div_pts = np.logical_and(div_0_pts, div_1_pts)
+            mns[i_0, i_1] = np.mean(vls[div_pts])
+            stds[i_0, i_1] = np.std(vls[div_pts])
+
+    return mns, stds
+

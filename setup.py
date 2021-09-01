@@ -12,5 +12,5 @@ setup(
     python_requires='>=3.7.0',
     description='Code for performing probabilistic model synthesis.',
     long_description=long_description,
-    install_requires=["matplotlib", "numpy"]
+    install_requires=["matplotlib", "numpy", "pot"]
 )

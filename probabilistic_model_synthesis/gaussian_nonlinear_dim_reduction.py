@@ -593,7 +593,8 @@ class Fitter():
     def fit(self, n_epochs: int, n_batches: int = 2, init_lr: float = .01, milestones: List[int] = None,
             gamma: float = .1, skip_lm_kl: bool = False, skip_mn_kl: bool = False,
             skip_psi_kl: bool = False, skip_s_kl: bool = False, update_int: int = 10, cp_epochs: Sequence[int] = None,
-            cp_save_folder: StrOrPath = None, cp_save_str: str = '', optimize_only_latents: bool = False):
+            cp_save_folder: StrOrPath = None, cp_save_str: str = '', optimize_only_latents: bool = False,
+            prev_epochs: int = 0):
         """ Fits GNLDR models together.
 
         Args:
@@ -632,6 +633,10 @@ class Fitter():
             optimize_only_latents: If true, only the parameters of the distributions over latents are are optimized.
             This is useful when wanting to hold the distributions over model parameters fixed but infer latents for
             new data points.
+
+            prev_epochs: The previous number of epochs of fitting that have passed before calling fit for this
+            round of fitting. This is only used to add metadata to saved checkpoints for keeping track of the total
+            number of fitting epochs over (possibly) many rounds of fitting.
 
         Returns:
 
@@ -796,7 +801,8 @@ class Fitter():
 
             # Create check point if needed
             if e_i in cp_epochs:
-                self.save_checkpoint(epoch=e_i, save_folder=cp_save_folder, save_str=cp_save_str)
+                self.save_checkpoint(epoch=e_i, save_folder=cp_save_folder, save_str=cp_save_str,
+                                     prev_epochs=prev_epochs)
 
         # Generate final log structure
         log = {'obj': obj_log, 'nell': nell_log, 'latent_kl': latent_kl_log, 'lm_kl': lm_kl_log,
@@ -903,7 +909,7 @@ class Fitter():
                 plt.xlabel('Epoch')
                 plt.ylabel(FIELD_LABELS[i])
 
-    def save_checkpoint(self, epoch: int, save_folder: StrOrPath, save_str: str = None):
+    def save_checkpoint(self, epoch: int, save_folder: StrOrPath, save_str: str = None, prev_epochs: int = 0):
         """ Saves a check point of models, posteriors and priors being fit.
 
         Everything will be saved after it has been moved to cpu.
@@ -916,11 +922,16 @@ class Fitter():
 
             save_str: An optional string to add to the saved check point names.  Saved names will be
             of the format 'cp_<save_str>_<epoch>.pt'.
+
+            prev_epochs: The number of previous epochs that occurred before the current round of fitting.  This will
+            be used to create a 'total_epoch' field with each saved check point that can be useful for keeping track
+            of the number of epochs that have passed over multiple rounds of fitting.
         """
 
         cp = {'vi_collections': [coll.generate_checkpoint() for coll in self.vi_collections],
               'priors': self.priors.generate_checkpoint(),
-              'epoch': epoch}
+              'epoch': epoch,
+              'total_epoch': prev_epochs + epoch}
 
         save_name = 'cp_' + save_str + str(epoch) + '.pt'
         save_path = pathlib.Path(save_folder) / save_name
@@ -1443,7 +1454,7 @@ class VICollection():
 
 def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, min_psi: float = .0001,
                      inds: torch.Tensor = None, corr_f: float = 1.0, skip_lm_kl: bool = False,
-                     skip_mn_kl: bool = False, skip_psi_kl: bool = False, skip_s_kl: bool = False):
+                     skip_mn_kl: bool = False, skip_psi_kl: bool = False, skip_s_kl: bool = False) -> dict:
     """ Approximates the ELBO for a single model via sampling.
 
     Calculations will be performed on whatever device the vi collection is on.
@@ -1490,7 +1501,7 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
 
             psi_kl: The kl divergence between the prior and posterior over the nosie variances
 
-            s_kl: The kl divergence between the prior and posterior over the nosie variances
+            s_kl: The kl divergence between the prior and posterior over the noise variances
 
     """
 
@@ -1589,14 +1600,38 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
 
 
 def evaluate_check_points(cp_folder: StrOrPath, data: Sequence[torch.Tensor], props: Sequence[torch.Tensor],
-                          n_smps: int, fit_opts: dict = None, elbo_opts: dict = None, device: torch.device = None):
-    """ Evaluates checkpoints.
+                          n_smps: int, fit_opts: dict = None, elbo_opts: dict = None,
+                          device: torch.device = None) -> Tuple[np.ndarray, np.ndarray, List, List]:
+    """ Evaluates all check points in a folder on given data, returning the sampled ELBO for each.
 
     Args:
 
         cp_folder: The folder with check points in it.
 
-        data: The data to evaluate the checkpoints on. data[i] is the data for evaluating the i^th model.
+        data: The data to evaluate the checkpoints on. data[i] is the data for evaluating the i^th model. If data[i]
+        is None, no evaluation will be done for this model.
+
+        props: The properties for each model. props[i] are the properties for the i^th model.
+
+        n_smps: The number of samples to use when approximating the ELBO.
+
+        fit_opts: Options to pass to the fit() call when infering latents (before approximating the ELBO)
+
+        elbo_opts: Options to pass to approximate_elbo.
+
+        device: The device to run calculations on. If none is provided, cpu will be used.
+
+    Returns:
+
+        cp_epochs: cp_epochs[i] is the epoch after wich the i^th check point was produced
+
+        cp_elbo: cp_elbo[i][j] is the approximated ELBO for the check point after cp_epochs[i] for the j^th model.
+        If check points were not evaluated for a model, all entries in the corresponding column will be nan.
+
+        cp_files: cp_files[i] is the results file for check point made after cp_epochs[i]
+
+        cp_logs: cp_logs[i[j] is tht fitting log produced in the step of estimating posteriors over latents for
+        the check point produced after epoch cp_epochs[i] and for the j^th model.
 
     """
 
@@ -1618,30 +1653,40 @@ def evaluate_check_points(cp_folder: StrOrPath, data: Sequence[torch.Tensor], pr
     # Approximates the optimal ELBO, holding priors and posteriors for model parameters fixed, for each check point
     n_mdls = len(data)
     cp_elbo = np.zeros([n_cps, n_mdls])
+    cp_logs = [None]*n_cps
     cp_epochs = np.zeros(n_cps)
     for cp_i, cp_file in enumerate(cp_files):
         cp = torch.load(cp_file)
-        cp_epochs[cp_i] = cp['epoch']
+        cp_epochs[cp_i] = cp['total_epoch']
 
         priors = PriorCollection.from_checkpoint(cp['priors'])
 
+        mdl_logs = [None]*n_mdls
         for m_i in range(n_mdls):
 
-            # Set the data and properties of the VI collection
-            coll_i = VICollection.from_checkpoint(cp=cp['vi_collections'][m_i], data=data[m_i], props=props[m_i])
+            if data[m_i] is not None:
 
-            n_latent_vars = coll_i.posteriors.latent_post.mns.shape[1]
+                # Set the data and properties of the VI collection
+                coll_i = VICollection.from_checkpoint(cp=cp['vi_collections'][m_i], data=data[m_i], props=props[m_i])
 
-            # Infer latents for the data - here we learn new distributions only on the latent variables, leaving
-            # distributions over model parameters untouched
-            coll_i.posteriors.latent_post, _ = infer_latents(n_latent_vars=n_latent_vars, vi_collection=coll_i,
-                                                             data=data[m_i], device=device, fit_opts=fit_opts)
+                n_latent_vars = coll_i.posteriors.latent_post.mns.shape[1]
 
-            # Approximate value of the ELBO
-            with torch.no_grad():
-                coll_i.to(device)
-                elbo_vls = approximate_elbo(coll=coll_i, priors=priors, n_smps=n_smps, **elbo_opts)
-                cp_elbo[cp_i, m_i] = elbo_vls['elbo'].detach().cpu().numpy()
+                # Infer latents for the data - here we learn new distributions only on the latent variables, leaving
+                # distributions over model parameters untouched
+                coll_i.posteriors.latent_post, mdl_logs[m_i] = infer_latents(n_latent_vars=n_latent_vars,
+                                                                             vi_collection=coll_i,
+                                                                             data=data[m_i], device=device,
+                                                                             fit_opts=fit_opts)
+
+                # Approximate value of the ELBO
+                with torch.no_grad():
+                    coll_i.to(device)
+                    elbo_vls = approximate_elbo(coll=coll_i, priors=priors, n_smps=n_smps, **elbo_opts)
+                    cp_elbo[cp_i, m_i] = elbo_vls['elbo'].detach().cpu().numpy()
+            else:
+                cp_elbo[cp_i, m_i] = np.nan
+
+        cp_logs[cp_i] = mdl_logs
 
         print('Done with check point: ' + str(cp_i + 1) + ' of ' + str(n_cps) + '.')
 
@@ -1649,8 +1694,10 @@ def evaluate_check_points(cp_folder: StrOrPath, data: Sequence[torch.Tensor], pr
     sort_order = np.argsort(cp_epochs)
     cp_epochs = cp_epochs[sort_order]
     cp_elbo = cp_elbo[sort_order, :]
+    cp_files = [cp_files[i] for i in sort_order]
+    cp_logs = [cp_logs[i] for i in sort_order]
 
-    return cp_epochs, cp_elbo
+    return cp_epochs, cp_elbo, cp_files, cp_logs
 
 
 def generate_simple_prior_collection(n_prop_vars: int, n_intermediate_latent_vars: int,
@@ -1795,6 +1842,8 @@ def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_para
         1) Concentration and rate parameters which are functions of the same form as the standard deviation
         functions for the mean.
 
+    Finally, the priors over scales will be Gaussian with fixed (non-learnable) means and standard deviations.
+
     Args:
         n_latent_vars: The number of latent variables in the FA models.
 
@@ -1829,6 +1878,10 @@ def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_para
 
         learnable_stds: True if the functions determining the standard deviations should have learnable parameters or
         not.  Setting this to false, results in conditional distributions with non-learnable standard deviations.
+
+        s_mn: Mean for the prior on scales.
+
+        s_std: Standard deviation on the prior on scales.
 
     Returns:
 
@@ -1948,7 +2001,8 @@ def generate_basic_posteriors(n_obs_vars: Sequence[int], n_smps: Sequence[int], 
 
 
 def infer_latents(n_latent_vars: int, vi_collection: VICollection, data: torch.Tensor, fit_opts: dict,
-                  device: torch.device = None) -> Tuple[SampleLatentsGaussianVariationalPosterior, dict]:
+                  device: torch.device = None,
+                  distribute_data: bool = True) -> Tuple[SampleLatentsGaussianVariationalPosterior, dict]:
     """ Infers latents, leaving posterior and prior distributions over model parameters unchanged.
 
     Args:
@@ -1964,6 +2018,11 @@ def infer_latents(n_latent_vars: int, vi_collection: VICollection, data: torch.T
 
         device: Device that will be used for inference.  If None, all fitting will be done on CPU.
 
+        distribute_data: True if all data should be distributed to the device before inferring latents.  While
+        this can speed computation up, this may not be possible if the data exceeds the GPU memory.  In this case,
+        the number of batches in fit_opts should be increased and distributed_data should be false, and then
+        we will only send smaller batches of data to the GPU at a time.
+
     Returns:
 
         latent_post: The posterior over latents for the provided data.
@@ -1973,7 +2032,7 @@ def infer_latents(n_latent_vars: int, vi_collection: VICollection, data: torch.T
     """
 
     if device is None:
-        device = [torch.device('cpu')]
+        device = torch.device('cpu')
 
     n_smps = data.shape[0]
 
@@ -1994,9 +2053,9 @@ def infer_latents(n_latent_vars: int, vi_collection: VICollection, data: torch.T
 
     # Setup the fitter, setting min_psi to 0 so we make sure we don't unintentionally change any private variances
     fitter = Fitter(vi_collections=[compute_vi_collection], priors=priors, devices=[device], min_psi=0.0)
-    fitter.distribute()
+    fitter.distribute(distribute_data=distribute_data)
     log = fitter.fit(**fit_opts, optimize_only_latents=True)
-    fitter.distribute(devices=[torch.device('cpu')])
+    fitter.distribute(devices=[torch.device('cpu')], distribute_data=distribute_data)
 
     return latent_post, log
 

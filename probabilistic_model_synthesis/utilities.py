@@ -1,5 +1,7 @@
 """ Basic tools used throughout the project. """
 
+import argparse
+import datetime
 from typing import List, Union
 
 import torch
@@ -62,4 +64,45 @@ def list_to_str(x: List[float]) -> str:
 
     return strs[0:-2]
 
+
+def parse_bool_str(s: str):
+    """ Parses string input to a boolean value.
+
+    Args:
+        s: The string to parse.
+
+    Returns:
+        vl: The boolean value.
+
+    Raises:
+        ArgumentTypeError: If string value cannot be parsed to a boolean value.
+    """
+    if s.lower() in ('t', 'true', '1'):
+        return True
+    elif s.lower() in ('f', 'false', '0'):
+        return False
+    else:
+        raise(argparse.ArgumentTypeError('Boolean value expected.'))
+
+
+def print_heading(h_str: str):
+    """ Prints a heading with string.
+
+    Args:
+        h_str: The heading string
+    """
+    print('============================================================================================')
+    time_str = datetime.datetime.today().strftime('%Y-%m-%d, %H:%M:%S: ')
+    print(time_str + h_str)
+    print('============================================================================================')
+
+
+def print_info(i_str: str):
+    """ Prints infomration.
+
+    Args:
+        i_str: The information to print.
+    """
+    time_str = datetime.datetime.today().strftime('%Y-%m-%d, %H:%M:%S: ')
+    print(time_str + i_str)
 

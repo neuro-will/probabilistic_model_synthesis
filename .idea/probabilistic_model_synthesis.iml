@@ -7,5 +7,6 @@
     <orderEntry type="module" module-name="janelia_core" />
     <orderEntry type="module" module-name="janelia_core" />
     <orderEntry type="module" module-name="ahrens_wbo" />
+    <orderEntry type="module" module-name="ahrens_wbo" />
   </component>
 </module>

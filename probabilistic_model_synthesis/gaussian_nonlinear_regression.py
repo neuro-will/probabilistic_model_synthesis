@@ -96,7 +96,7 @@ def approximate_elbo(coll: 'VICollection', priors: 'PriorCollection', n_smps: in
         n_smps: The number of samples to use when calculating the ELBO
 
         inds: Indices of data points in coll.data that we should compute the ELBO for.  If not provided, all
-        data poitns will be used.
+        data points will be used.
 
         corr_f: A correction factor to be applied if using a subset of data points for computing the ELBO.  This is
         useful when using mini-batches of data.  For example, if we call approximate_elbo for each minibatch, and in
@@ -427,7 +427,7 @@ class Fitter():
             gamma: float = .1, skip_w_kl: bool = False, skip_s_in_kl: bool = False,
             skip_b_in_kl: bool = False, skip_s_out_kl: bool = False, skip_b_out_kl: bool = False,
             skip_psi_kl: bool = False, update_int: int = 10, cp_epochs: Sequence[int] = None,
-            cp_save_folder: StrOrPath = None, cp_save_str: str = ''):
+            cp_save_folder: StrOrPath = None, cp_save_str: str = '', prev_epochs: int = 0):
         """ Fits GNLDR models together.
 
         Args:
@@ -470,6 +470,10 @@ class Fitter():
             cp_save_folder: A folder where check points should be saved
 
             cp_save_str: A string to add to the name of saved check point files (see save_checkpoint() for more details).
+
+            prev_epochs: The previous number of epochs of fitting that have passed before calling fit for this
+            round of fitting. This is only used to add metadata to saved checkpoints for keeping track of the total
+            number of fitting epochs over (possibly) many rounds of fitting.
 
         Returns:
 
@@ -636,7 +640,8 @@ class Fitter():
 
             # Create check point if needed
             if e_i in cp_epochs:
-                self.save_checkpoint(epoch=e_i, save_folder=cp_save_folder, save_str=cp_save_str)
+                self.save_checkpoint(epoch=e_i, save_folder=cp_save_folder, save_str=cp_save_str,
+                                     prev_epochs=prev_epochs)
 
         # Generate final log structure
         log = {'obj': obj_log, 'nell': nell_log, 'w_kl': w_kl_log, 's_in_kl': s_in_kl_log, 'b_in_kl': b_in_kl_log,
@@ -743,7 +748,7 @@ class Fitter():
                 plt.xlabel('Epoch')
                 plt.ylabel(FIELD_LABELS[i])
 
-    def save_checkpoint(self, epoch: int, save_folder: StrOrPath, save_str: str = None):
+    def save_checkpoint(self, epoch: int, save_folder: StrOrPath, save_str: str = None, prev_epochs: int = 0):
         """ Saves a check point of models, posteriors and priors being fit.
 
         Everything will be saved after it has been moved to cpu.
@@ -755,12 +760,18 @@ class Fitter():
             save_folder: The folder that checkpoints should be saved in.
 
             save_str: An optional string to add to the saved check point names.  Saved names will be
-            of the format 'cp_<save_str>_<epoch>.pt'.
+            of the format 'cp_<save_str><epoch>.pt'.
+
+            prev_epochs: An offset to add to epoch numbers to create a "total epoch" number. This is useful if
+            performing multiple rounds of fitting and wanting to keep track of the total number of epochs that
+            have passed over all fitting rounds.
+
         """
 
         cp = {'vi_collections': [coll.generate_checkpoint() for coll in self.vi_collections],
               'priors': self.priors.generate_checkpoint(),
-              'epoch': epoch}
+              'epoch': epoch,
+              'total_epoch': prev_epochs + epoch}
 
         save_name = 'cp_' + save_str + str(epoch) + '.pt'
         save_path = pathlib.Path(save_folder) / save_name
@@ -1252,7 +1263,9 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
     sp_fitter = Fitter(vi_collections=sp_vi_collections, priors=sp_priors, devices=devices)
 
     sp_fitter.distribute(distribute_data=True, devices=devices)
-    sp_logs = [sp_fitter.fit(skip_w_kl=True, **fit_opts) for fit_opts in sp_fit_opts]
+    prev_sp_epochs = [0] + [fit_opts['n_epochs'] for fit_opts in sp_fit_opts]
+    sp_logs = [sp_fitter.fit(skip_w_kl=True, prev_epochs=prev_epochs, **fit_opts)
+               for prev_epochs, fit_opts in zip(prev_sp_epochs, sp_fit_opts)]
     sp_fitter.distribute(distribute_data=True, devices=[torch.device('cpu')])
 
     # ==================================================================================================================
@@ -1302,11 +1315,6 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
                     ip_posteriors[s].w_post.dists[d_i].mn_f.f.vl.data = copy.deepcopy(cur_mn[:, d_i])
                     ip_posteriors[s].w_post.dists[d_i].std_f.f.set_value(copy.deepcopy(cur_std[:, d_i].squeeze().numpy()))
 
-
-
-        # Here we reset the std of the ip prior
-        #ip_priors.w_prior.set_std(w_prior_opts['std_init'])
-
     # ==================================================================================================================
     # Setup the vi collections
     # ==================================================================================================================
@@ -1321,7 +1329,9 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
     ip_fitter = Fitter(vi_collections=ip_vi_collections, priors=ip_priors, devices=devices)
 
     ip_fitter.distribute(distribute_data=True, devices=devices)
-    ip_logs = [ip_fitter.fit(**fit_opts) for fit_opts in ip_fit_opts]
+    prev_ip_epochs = [0] + [fit_opts['n_epochs'] for fit_opts in ip_fit_opts]
+    ip_logs = [ip_fitter.fit(**fit_opts, prev_epochs=prev_epochs)
+               for prev_epochs, fit_opts in zip(prev_ip_epochs, ip_fit_opts)]
     ip_fitter.distribute(distribute_data=True, devices=[torch.device('cpu')])
 
     # ==================================================================================================================
@@ -1539,9 +1549,6 @@ class PosteriorCollection():
         self.b_out_post = b_out_post
         self.psi_post = psi_post
 
-        # Keep list of distributions to make code in various functions more compact
-        self.all_dists = [w_post, s_in_post, b_in_post, s_out_post, b_out_post, psi_post]
-
     @staticmethod
     def from_checkpont(cp: dict) -> 'PosteriorCollection':
         """ Generates a new PosteriorCollection from a checkpoint dictionary.
@@ -1556,7 +1563,7 @@ class PosteriorCollection():
         """
 
         return PosteriorCollection(w_post=cp['w_post'], s_in_post=cp['s_in_post'], b_in_post=cp['b_in_post'],
-                                   s_out_post=cp['s_out_post'], b_out_post=cp['b_out_post'], psi_post=cp['psi_psi'])
+                                   s_out_post=cp['s_out_post'], b_out_post=cp['b_out_post'], psi_post=cp['psi_post'])
 
     def generate_checkpoint(self):
         """ Generates a check point of the collection.
@@ -1585,14 +1592,75 @@ class PosteriorCollection():
     def to(self, device: Union[str, torch.device]):
         """ Moves the collection the the specified device."""
 
-        for post in self.all_dists:
+        for post in self._all_dists():
             if post is not None:
                 post.to(device)
 
     def parameters(self) -> List[torch.nn.Parameter]:
         """ Returns all parameters in all distributions in the collection. """
 
-        return list(itertools.chain(*[post.parameters() for post in self.all_dists if post is not None]))
+        return list(itertools.chain(*[post.parameters() for post in self._all_dists() if post is not None]))
+
+    def _all_dists(self) -> list:
+        return [self.w_post, self.s_in_post, self.b_in_post, self.s_out_post, self.b_out_post, self.psi_post]
+
+
+def predict(coll: 'VICollection', x: torch.Tensor, sample: bool = False) -> torch.Tensor:
+    """ Generates predictions from a model, given point estimates and distributions over model parameters.
+
+    This function checks the model object in a VI Collection to see which parameters are estimated with point
+    estimates.  For those that are not, it will use specific values based on the posterior distributions for
+    these parameters.  These specific values can either be the mean of the distributions or samples from the
+    distribution.
+
+    Args:
+         coll: The VICollection object containing the model and posterior distributions over parameters for the system
+         we generate predictions for.
+
+         x: Input data we use to generate predictions, of shape n_smps*n_input_variables.
+
+         sample: If true, values for parameters represented as posterior distributions will be selected by sampling
+         from these distributions.  If False, the means of the distributions will be used.
+
+    Returns:
+
+        preds: Predicted data, of shape n_smps*n_input_variables.
+    """
+
+    # Determine if there are any parameters for which point estimates are used in place of distributions
+    w_point_estimate = coll.mdl.w is not None
+    s_in_point_estimate = coll.mdl.s_in is not None
+    b_in_point_estimate = coll.mdl.b_in is not None
+    s_out_point_estimate = coll.mdl.s_out is not None
+    b_out_point_estimate = coll.mdl.b_out is not None
+
+    posteriors = coll.posteriors
+    props = coll.props
+    mdl = coll.mdl
+
+    def _get_param_vl(post, props, point_estimate, squeeze):
+        if not point_estimate:
+            if sample:
+                _, param_vl = _sample_posterior(post=post, props=props)
+            else:
+                param_vl = post(props)
+            if squeeze:
+                param_vl = param_vl.squeeze()
+        else:
+            # Passing None to appropriate functions will signal we use the parameter stored in the model object
+            param_vl = None
+
+        return param_vl
+
+    # Get parameter values
+    w = _get_param_vl(post=posteriors.w_post, props=props, point_estimate=w_point_estimate, squeeze=False)
+    s_in = _get_param_vl(post=posteriors.s_in_post, props=props, point_estimate=s_in_point_estimate, squeeze=True)
+    b_in = _get_param_vl(post=posteriors.b_in_post, props=props, point_estimate=b_in_point_estimate, squeeze=True)
+    s_out = _get_param_vl(post=posteriors.s_out_post, props=props, point_estimate=s_out_point_estimate, squeeze=True)
+    b_out = _get_param_vl(post=posteriors.b_out_post, props=props, point_estimate=b_out_point_estimate, squeeze=True)
+
+    # Generate predictions
+    return mdl.cond_mean(x=x, w=w, s_in=s_in, b_in=b_in, s_out=s_out, b_out=b_out)
 
 
 class PriorCollection():
@@ -1629,9 +1697,6 @@ class PriorCollection():
         self.s_out_prior = s_out_prior
         self.b_out_prior = b_out_prior
         self.psi_prior = psi_prior
-
-        # Keep track of priors in a list to make code more compact in various functions
-        self.all_priors = [w_prior, s_in_prior, b_in_prior, s_out_prior, b_out_prior, psi_prior]
 
     def device(self) -> torch.device:
         """ Returns the device the priors are on.
@@ -1677,7 +1742,7 @@ class PriorCollection():
 
         # First, see if there is anything to move
         move = False
-        for prior in self.all_priors:
+        for prior in self._all_priors():
             if prior is not None:
                 move = True
 
@@ -1700,15 +1765,17 @@ class PriorCollection():
     def to(self, device: Union[str, torch.device]):
         """ Moves the collection the the specified device."""
 
-        for prior in self.all_priors:
+        for prior in self._all_priors():
             if prior is not None:
                 prior.to(device)
 
     def parameters(self) -> List[torch.nn.Parameter]:
         """ Returns all parameters present in all priors in the collection. """
 
-        return list(itertools.chain(*[prior.parameters() for prior in self.all_priors if prior is not None]))
+        return list(itertools.chain(*[prior.parameters() for prior in self._all_priors() if prior is not None]))
 
+    def _all_priors(self) -> List:
+        return [self.w_prior, self.s_in_prior, self.b_in_prior, self.s_out_prior, self.b_out_prior, self.psi_prior]
 
 class VICollection():
     """ A collection of objects necessary for fitting one GNLR model with variational inference.
