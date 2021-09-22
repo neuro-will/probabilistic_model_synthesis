@@ -17,8 +17,10 @@ from ahrens_wbo.data_processing import SegmentTable
 
 from janelia_core.stats.regression import r_squared
 
+from probabilistic_model_synthesis.gaussian_nonlinear_regression import approximate_elbo
 from probabilistic_model_synthesis.gaussian_nonlinear_regression import fit_with_hypercube_priors
 from probabilistic_model_synthesis.gaussian_nonlinear_regression import predict
+from probabilistic_model_synthesis.gaussian_nonlinear_regression import PriorCollection
 from probabilistic_model_synthesis.gaussian_nonlinear_regression import VICollection
 from probabilistic_model_synthesis.utilities import print_heading
 from probabilistic_model_synthesis.utilities import print_info
@@ -196,7 +198,7 @@ def syn_ahrens_gnlr_mdls(fold_str_dir: str, fold_str_file: str, segment_table_di
 
 
 def post_process(results_file: str, early_stopping_subjects: Sequence[int] = None, eval_types: Sequence[str] = None,
-                 early_stopping: bool = True):
+                 early_stopping: bool = True, n_elbo_smps: int = 100):
     """ Post-processes results produced by syn_ahrens_gnlr_mdls.
 
     This function will:
@@ -266,7 +268,7 @@ def post_process(results_file: str, early_stopping_subjects: Sequence[int] = Non
     # ==================================================================================================================
     def _process_fit_type_rs(mdl_type: str, fit_rs: dict, fit_ps: dict, subject_order: Sequence[int],
                              early_stopping_subjects: Sequence[int], data: dict, subject_neuron_locs: dict,
-                             early_stopping: bool):
+                             early_stopping: bool, n_elbo_smps: int):
         """
         Args:
 
@@ -342,9 +344,12 @@ def post_process(results_file: str, early_stopping_subjects: Sequence[int] = Non
                                                                 props=subject_neuron_locs[s_n])
                                    for s_i, s_n in enumerate(subject_order)]
 
+            best_priors = PriorCollection.from_checkpoint(best_cp['priors'])
+
         else:
             best_cp_ind = None
             best_vi_collections = fit_rs['vi_collections']
+            best_priors = fit_rs['priors']
 
         # ==============================================================================================================
         # Generate predictions with the best synthesized models
@@ -364,6 +369,21 @@ def post_process(results_file: str, early_stopping_subjects: Sequence[int] = Non
             preds[s_n] = subj_preds
 
         # ==============================================================================================================
+        # Measure ELBO with the best synthesized models on train, test and validation data
+        elbos = dict()
+        for s_i, s_n in enumerate(subject_order):
+            subj_elbos = dict()
+            for cv_string in cv_strings:
+                if data[s_n][cv_string] is not None:
+                    coll = best_vi_collections[s_i]
+                    coll.data = [data[s_n][cv_string][0], data[s_n][cv_string][1]]
+                    with torch.no_grad():
+                        subj_elbos[cv_string] = approximate_elbo(coll=coll, priors=best_priors, n_smps=n_elbo_smps)
+                else:
+                    subj_elbos[cv_string] = None
+            elbos[s_n] = subj_elbos
+
+        # ==============================================================================================================
         # Package everything together and return
 
         return {'cp_results': {'epochs': cp_epochs,
@@ -371,7 +391,8 @@ def post_process(results_file: str, early_stopping_subjects: Sequence[int] = Non
                                'validation_perf': validation_cp_perf,
                                'test_perf': test_cp_perf},
                 'early_stopping': {'best_cp_ind': best_cp_ind},
-                'preds': preds}
+                'preds': preds,
+                'elbos': elbos}
 
     # ==================================================================================================================
     # Load the results
@@ -386,7 +407,7 @@ def post_process(results_file: str, early_stopping_subjects: Sequence[int] = Non
     # ==================================================================================================================
 
     if eval_types is None:
-        eval_types = ['ip', 'sp']
+        eval_types = ['sp', 'ip']
 
     if early_stopping_subjects is None:
         early_stopping_subjects = subject_order
@@ -466,7 +487,8 @@ def post_process(results_file: str, early_stopping_subjects: Sequence[int] = Non
         rs_dict[e_type] = _process_fit_type_rs(mdl_type=e_type, fit_ps=fit_ps, fit_rs=rs['rs'][e_type],
                                                subject_order=subject_order,
                                                early_stopping_subjects=early_stopping_subjects, data=data,
-                                               subject_neuron_locs=subject_neuron_locs, early_stopping=early_stopping)
+                                               subject_neuron_locs=subject_neuron_locs, early_stopping=early_stopping,
+                                               n_elbo_smps=n_elbo_smps)
 
     # ==================================================================================================================
     # Finish packaging results and return

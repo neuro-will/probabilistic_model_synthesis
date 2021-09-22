@@ -14,7 +14,7 @@ from probabilistic_model_synthesis.utilities import print_info
 
 parser = argparse.ArgumentParser(description=('Post-processes results after models are synthesized with ' +
                                               'syn_ahrens_gnlr_mdls. This is a light wrapper around the function ' +
-                                              'gnlr_post_process, that enables post processing to be called directly ' +
+                                              'gnlr_ahrens_tools.post_process, that enables post processing to be called directly ' +
                                               'from the command line when processing things in parallel on the ' +
                                               'Janelia cluster.'))
 
@@ -41,10 +41,10 @@ else:
     early_stopping_subjects = None
 
 eval_types = []
-if parse_bool_str(args.ip):
-    eval_types.append('ip')
 if parse_bool_str(args.sp):
     eval_types.append('sp')
+if parse_bool_str(args.ip):
+    eval_types.append('ip')
 
 early_stopping = parse_bool_str(args.early_stopping)
 

@@ -85,7 +85,7 @@ def align_low_d_spaces(w_0: np.ndarray, s_in_0: np.ndarray, b_in_0: np.ndarray,
 def approximate_elbo(coll: 'VICollection', priors: 'PriorCollection', n_smps: int, min_psi: float = .0001,
                      inds: torch.Tensor = None, corr_f: float = 1.0, skip_w_kl: bool = False,
                      skip_s_in_kl: bool = False, skip_b_in_kl: bool = False, skip_s_out_kl: bool = False,
-                     skip_b_out_kl: bool = False, skip_psi_kl: bool = False):
+                     skip_b_out_kl: bool = False, skip_psi_kl: bool = False) -> dict:
     """
 
     Args:

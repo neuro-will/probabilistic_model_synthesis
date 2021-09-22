@@ -18,7 +18,7 @@ import time
 # ======================================================================================================================
 
 # Specify if we should run the fits
-FIT = True
+FIT = False
 
 # Specify if we should run post processing
 POST_PROCESS = True
@@ -50,22 +50,17 @@ FOLD_STR_FILES = ['fold_str_base_14_tgt_1.pkl',
 # Specify how many folds we fit
 N_FOLDS = 3
 
-# Specify job resources for fitting combined and individual models
+# Specify number of slots for each analysis type
 COMB_N_SLOTS = 3
-COMB_QUEUE = 'gpu_tesla'
-COMB_N_GPU = 1
-
 IND_N_SLOTS = 3
-IND_QUEUE = 'gpu_tesla'
-IND_N_GPU = 1
 
 # ======================================================================================================================
 # Code to submit the jobs goes here
 # ======================================================================================================================
 TYPES = ['comb', 'ind']
 
-BASE_COMB_CALL = 'bsub -n ' + str(COMB_N_SLOTS) + ' -gpu "num=' + str(COMB_N_GPU) + '"' + ' -q ' + COMB_QUEUE
-BASE_IND_CALL = 'bsub -n ' + str(IND_N_SLOTS) + ' -gpu "num=' + str(IND_N_GPU) + '"' + ' -q ' + IND_QUEUE
+BASE_COMB_CALL = 'bsub -n ' + str(COMB_N_SLOTS)
+BASE_IND_CALL = 'bsub -n ' + str(IND_N_SLOTS)
 
 ANACONDA_SETUP = '. /groups/bishop/home/bishopw/anaconda3/etc/profile.d/conda.sh'
 ENV_SETUP = 'conda activate probabilistic_model_synthesis'
