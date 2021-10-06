@@ -451,7 +451,7 @@ def syn_ahrens_fa_mdls(fold_str_dir: str, fold_str_file: str, segment_table_dir:
         fold: The fold of data in the fold structures that we are fitting to
 
         mdl_opts: Dictionary of parameters specifying model structure and fitting to be passed to the function
-        fit_with_hypercube_priors.  All options can be specified except data, and props (which are determined by
+        synthesize_fa_mdls.  All options can be specified except data, and props (which are determined by
         the subjects fit).  See that function for list of options which must be provided.
 
         sp_cp_dir: Directory to save check points in for shared posterior fitting.  Can be None, if no check points will

@@ -28,26 +28,26 @@ SAVE_FILE = 'test_results.pt'
 BASE_SUBJECTS = [1, 2, 5, 6]
 
 # Each of the target subjects
-TGT_SUBJECTS = [8, 9, 10, 11] #[8, 10, 11]
+TGT_SUBJECTS = [8] #, 9, 10, 11] #[8, 10, 11]
 
 # Specify the periods we want to measure performance on individually in the test data
 TEST_PERIODS = ['phototaxis_left', 'phototaxis_right']
 
 # Specify the full path to the parameter file
-PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/same_cond_transfer_analysis/v0/transfer_params.pkl'
+PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/same_cond_transfer_analysis/v2/transfer_params.pkl'
 
 # Specify the base folder into which results should be saved
-RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/same_cond_transfer_analysis/v0'
+RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/same_cond_transfer_analysis/v2'
 
 # Specify the fold structure files we should fit to
-FOLD_STR_FILES = ['fold_str_base_14_tgt_1.pkl',
-                  'fold_str_base_14_tgt_2.pkl',
-                  'fold_str_base_14_tgt_4.pkl',
-                  'fold_str_base_14_tgt_8.pkl',
-                  'fold_str_base_14_tgt_14.pkl']
+FOLD_STR_FILES = ['fold_str_base_14_tgt_1.pkl']#,
+                  #'fold_str_base_14_tgt_2.pkl',
+                  #'fold_str_base_14_tgt_4.pkl',
+                  #'fold_str_base_14_tgt_8.pkl',
+                  #'fold_str_base_14_tgt_14.pkl']
 
 # Specify how many folds we fit
-N_FOLDS = 3
+N_FOLDS = 1
 
 # Specify job resources for fitting combined and individual models
 COMB_N_SLOTS = 5

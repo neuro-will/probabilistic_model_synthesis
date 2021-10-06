@@ -18,7 +18,6 @@ import torch.optim
 
 
 from janelia_core.math.basic_functions import list_grid_pts
-from janelia_core.ml.extra_torch_modules import ConstantRealFcn
 from janelia_core.ml.extra_torch_modules import FixedOffsetAbs
 from janelia_core.ml.extra_torch_modules import SumOfTiledHyperCubeBasisFcns
 from janelia_core.ml.torch_distributions import CondGaussianDistribution
@@ -45,8 +44,8 @@ OptionalTensor = Optional[torch.Tensor]
 StrOrPath = Union[pathlib.Path, str]
 
 
-def align_intermediate_spaces(mn0: np.ndarray, lm0: np.ndarray, s0: np.ndarray,
-                              mn1: np.ndarray, lm1: np.ndarray, s1: np.ndarray,
+def align_intermediate_spaces(mn0: np.ndarray, lm0: np.ndarray,
+                              mn1: np.ndarray, lm1: np.ndarray,
                               int_z0: Optional[np.ndarray] = None,
                               int_z1: Optional[np.ndarray] = None,
                               align_by_params: bool = True) -> Tuple[np.ndarray]:
@@ -70,13 +69,9 @@ def align_intermediate_spaces(mn0: np.ndarray, lm0: np.ndarray, s0: np.ndarray,
 
         lm0: The loading matrix  for model 0
 
-        s0: The scales for model 0
-
         mn1: The mean vector for model 1
 
         lm1: The loading matrix for model 1
-
-        s1: The scales matrix for model 1
 
         int_z0: The latents in the intermediate space for model 0. Of shape n_smps*n_intermediate_dims
 
@@ -101,19 +96,12 @@ def align_intermediate_spaces(mn0: np.ndarray, lm0: np.ndarray, s0: np.ndarray,
     # Make local copies of input variables
     mn0 = copy.deepcopy(mn0)
     lm0 = copy.deepcopy(lm0)
-    s0 = copy.deepcopy(s0)
     mn1 = copy.deepcopy(mn1)
     lm1 = copy.deepcopy(lm1)
-    s1 = copy.deepcopy(s1)
     int_z0 = copy.deepcopy(int_z0)
     int_z1 = copy.deepcopy(int_z1)
 
     # Perform alignment of intermediate latent spaces
-    mn0 = mn0 * np.abs(s0)
-    lm0 = lm0 * np.abs(np.expand_dims(s0, 1))
-    mn1 = mn1 * np.abs(s1)
-    lm1 = lm1 * np.abs(np.expand_dims(s1, 1))
-
     m0_conc = np.concatenate([lm0, np.expand_dims(mn0, 1)], axis=1)
     m1_conc = np.concatenate([lm1, np.expand_dims(mn1, 1)], axis=1)
 
@@ -142,8 +130,7 @@ def align_intermediate_spaces(mn0: np.ndarray, lm0: np.ndarray, s0: np.ndarray,
 
 
 def compare_mean_and_lm_dists(lm_0_prior: CondVAEDistribution, mn_0_prior: CondVAEDistribution,
-                              s_0_prior: CondVAEDistribution, lm_1_prior: CondVAEDistribution,
-                              mn_1_prior: CondVAEDistribution, s_1_prior: CondVAEDistribution,
+                              lm_1_prior: CondVAEDistribution, mn_1_prior: CondVAEDistribution,
                               dim_0_range: Sequence, dim_1_range: Sequence, n_pts_per_dim: Sequence):
     """ Visualizes two sets of conditional distributions over means and loading matrices, aligned to one another.
 
@@ -157,13 +144,9 @@ def compare_mean_and_lm_dists(lm_0_prior: CondVAEDistribution, mn_0_prior: CondV
 
         mn_0_prior: The conditional prior over means for the first model
 
-        s_0_prior: The conditional prior over scales for the first model.
-
         lm_1_prior: The conditional prior over loading matrices for the second model
 
         mn_1_prior: The conditional prior over means for the second model
-
-        s_1_prior: The conditional prior over scales for the second model.
 
         dim_0_range: The range of values of the form [start, stop] for the first dimension of conditioning values we
         view means and standard deviations over.
@@ -181,14 +164,12 @@ def compare_mean_and_lm_dists(lm_0_prior: CondVAEDistribution, mn_0_prior: CondV
 
     lm0_mn = lm_0_prior(pts).detach().numpy()
     mn0_mn = mn_0_prior(pts).detach().numpy().squeeze()
-    s0_mn = s_0_prior(pts).detach().numpy().squeeze()
     lm1_mn = lm_1_prior(pts).detach().numpy()
     mn1_mn = mn_1_prior(pts).detach().numpy().squeeze()
-    s1_mn = s_1_prior(pts).detach().numpy().squeeze()
 
     # Determine alignment between intermediate latent spaces and align means
-    mn1_mn_al, lm1_mn_al, w = align_intermediate_spaces(lm0=lm0_mn, mn0=mn0_mn, s0=s0_mn,
-                                                        lm1=lm1_mn, mn1=mn1_mn, s1=s1_mn)
+    mn1_mn_al, lm1_mn_al, w = align_intermediate_spaces(lm0=lm0_mn, mn0=mn0_mn,
+                                                        lm1=lm1_mn, mn1=mn1_mn)
 
     # Now get aligned standard deviations
     if 'dists' in dir(lm_1_prior):
@@ -255,18 +236,12 @@ class GNLDRMdl(torch.nn.Module):
 
         z_t ~ N(0,I), z_t \in R^p
         l_t = m(z_t) l_t \in R^q
-        mn_t = abs(s)*(\Lambda l_t + \mu), Lambda \in R^{n \times q}, mu \in R^n, s \in R^b, where * represents an
-                                      element-wise product
+        mn_t = \Lambda l_t + \mu, Lambda \in R^{n \times q}, mu \in R^n
         x_t = mn_t + ep_t, ep_t ~ N(0, \Psi) for some diagonal PSD matrix Psi
 
     where m() is a neural network which lifts latent z_t into a (typically) higher dimensional space (the space of
-    l_t) for which there is a linear mapping (parameterized by \Lambda, \mu and s) between l_t and mean values of
+    l_t) for which there is a linear mapping (parameterized by \Lambda and \mu) between l_t and mean values of
     observed variables.
-
-    Here the vector s applies a scaling to the mean of each observed variable.  While it is algebraically redundant
-    in the above model formulation, it becomes important when fitting models across experiments, where the scale of
-    values observed variables take on may change across experiments, and we do want these changes to be reflected in the
-    \Lambda and \mu values we learn for each experiment, so we instead absorb them in s.
 
     This object by default will use it's own internal parameters, but it's various functions allow a user
     to provide their own parameter values, making it easy to use these objects when fitting models and
@@ -275,11 +250,11 @@ class GNLDRMdl(torch.nn.Module):
     """
 
     def __init__(self, n_latent_vars: int, m: torch.nn.Module, lm: OptionalTensor = None, mn: OptionalTensor = None,
-                 psi: OptionalTensor = None, s: OptionalTensor = None):
+                 psi: OptionalTensor = None):
         """ Creates a new GNLDRMdl Object.
 
-        Note: when creating this object the user can supply values for the loading matrix, mean vector, private
-        variance or s vector or optionally set any of these to None.  If they are set to None, no parameters will be
+        Note: when creating this object the user can supply values for the loading matrix, mean vector or private
+        variance or optionally set any of these to None.  If they are set to None, no parameters will be
         created for them in the model.  In this case, it will be expected that values for them will be provided when
         calling any function (e.g., sample) that need these values.  The reason for this is that model
         objects may be used in frameworks which treat some/all of the parameters of a model as random variables, and we
@@ -297,8 +272,6 @@ class GNLDRMdl(torch.nn.Module):
             mn: The mean vector of shape n_obs_variables
 
             psi: The private variances of shape n_obs_variables
-
-            s: The vector of scales of shape n_obs_variables.
 
         """
         super().__init__()
@@ -321,15 +294,10 @@ class GNLDRMdl(torch.nn.Module):
         else:
             self.psi = None
 
-        if s is not None:
-            self.s = torch.nn.Parameter(s)
-        else:
-            self.s = None
-
         self.register_buffer('log_2_pi', torch.log(torch.tensor(2*math.pi)))
 
     def cond_log_prob(self, z: torch.Tensor, x: torch.Tensor, lm: OptionalTensor = None, mn: OptionalTensor = None,
-                      psi: OptionalTensor = None, s: OptionalTensor = None) -> torch.Tensor:
+                      psi: OptionalTensor = None) -> torch.Tensor:
         """ Computes the log probability of observations given latents.
 
         Args:
@@ -342,8 +310,6 @@ class GNLDRMdl(torch.nn.Module):
             mn: If provided, uses this in place of the mean parameter of the model.
 
             psi: If provided, uses this in place of the psi parameter of the model.
-
-            s: If provided, use this in place of the scales parameters of the model.
 
         Returns:
 
@@ -359,10 +325,8 @@ class GNLDRMdl(torch.nn.Module):
             mn = self.mn
         if psi is None:
             psi = self.psi
-        if s is None:
-            s = self.s
 
-        mns = self.cond_mean(z=z, lm=lm, mn=mn, s=s)
+        mns = self.cond_mean(z=z, lm=lm, mn=mn)
 
         ll = -.5*torch.sum(((x - mns)**2)/psi, dim=1)
         ll -= .5*torch.sum(torch.log(psi))
@@ -370,8 +334,7 @@ class GNLDRMdl(torch.nn.Module):
 
         return ll
 
-    def cond_mean(self, z: torch.Tensor, lm: OptionalTensor = None, mn: OptionalTensor = None,
-                  s: OptionalTensor = None) -> torch.Tensor:
+    def cond_mean(self, z: torch.Tensor, lm: OptionalTensor = None, mn: OptionalTensor = None) -> torch.Tensor:
         """ Computes the mean of observations given latents.
 
            Args:
@@ -380,8 +343,6 @@ class GNLDRMdl(torch.nn.Module):
                lm: If provided, uses this in place of the loading matrix parameter of the model.
 
                mn: If provided, uses this in place of the mean parameter of the model.
-
-               s: If provided, use this in place of the scales parameters of the model.
 
            Returns:
 
@@ -393,15 +354,13 @@ class GNLDRMdl(torch.nn.Module):
             lm = self.lm
         if mn is None:
             mn = self.mn
-        if s is None:
-            s = self.s
 
-        mns = torch.abs(s)*(torch.matmul(self.m(z), lm.T) + mn)
+        mns = torch.matmul(self.m(z), lm.T) + mn
 
         return mns
 
     def sample(self, n_smps: int, lm: OptionalTensor = None, mn: OptionalTensor = None,
-               psi: OptionalTensor = None, s:OptionalTensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
+               psi: OptionalTensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Generates samples from the model.
 
         Args:
@@ -411,8 +370,6 @@ class GNLDRMdl(torch.nn.Module):
             mn: If provided, uses this in place of the mean parameter of the model.
 
             psi: If provided, uses this in place of the psi parameter of the model.
-
-            s: If provided, use this in place of the scales parameters of the model.
 
         Returns:
 
@@ -428,14 +385,12 @@ class GNLDRMdl(torch.nn.Module):
             mn = self.mn
         if psi is None:
             psi = self.psi
-        if s is None:
-            s = self.s
 
         n_obs_vars = lm.shape[0]
 
         z = torch.randn(n_smps, self.n_latent_vars)
 
-        x_mn = self.cond_mean(z=z, lm=lm, mn=mn, s=s)
+        x_mn = self.cond_mean(z=z, lm=lm, mn=mn)
         x_noise = torch.randn(n_smps, n_obs_vars)*torch.sqrt(psi)
         x = x_mn + x_noise
 
@@ -481,24 +436,21 @@ class GNLDRMdl(torch.nn.Module):
             subplot.title = plt.title(title)
 
         # Align the intermediate latent space of m1 to that of m0
-        s0 = m0.s.detach().numpy()
         lm0 = m0.lm.detach().numpy()
         mn0 = m0.mn.detach().numpy()
 
-        s1 = m1.s.detach().numpy()
-        lm1 = m1.lm.detach().numpy()*np.abs(np.expand_dims(s1, 1))
-        mn1 = m1.mn.detach().numpy()*np.abs(s1)
+        lm1 = m1.lm.detach().numpy()
+        mn1 = m1.mn.detach().numpy()
 
-        mn1, lm1, _ = align_intermediate_spaces(mn0=mn0, lm0=lm0, s0=s0, mn1=mn1, lm1=lm1, s1=s1)
+        mn1, lm1, _ = align_intermediate_spaces(mn0=mn0, lm0=lm0, mn1=mn1, lm1=lm1)
 
         # The transformed means and loading matrices have scales applied, so we apply them to model 0 as well
-        lm0 = m0.lm.detach().numpy()*np.abs(np.expand_dims(s0, 1))
-        mn0 = m0.mn.detach().numpy()*np.abs(s0)
+        lm0 = m0.lm.detach().numpy()
+        mn0 = m0.mn.detach().numpy()
 
         # Make plots of scalar variables
         _make_subplot([0, 0], 6, 6, mn0, mn1, 'Mean')
         _make_subplot([8, 0], 6, 6, m0.psi.cpu().detach().numpy(), m1.psi.cpu().detach().numpy(), 'Psi')
-        _make_subplot([16, 0], 6, 6, np.abs(m0.s.cpu().detach().numpy()), np.abs(m1.s.cpu().detach().numpy()), 'S')
 
         # Make plots of loading matrices
         lm_diff = lm0 - lm1
@@ -592,7 +544,7 @@ class Fitter():
 
     def fit(self, n_epochs: int, n_batches: int = 2, init_lr: float = .01, milestones: List[int] = None,
             gamma: float = .1, skip_lm_kl: bool = False, skip_mn_kl: bool = False,
-            skip_psi_kl: bool = False, skip_s_kl: bool = False, update_int: int = 10, cp_epochs: Sequence[int] = None,
+            skip_psi_kl: bool = False, update_int: int = 10, cp_epochs: Sequence[int] = None,
             cp_save_folder: StrOrPath = None, cp_save_str: str = '', optimize_only_latents: bool = False,
             prev_epochs: int = 0):
         """ Fits GNLDR models together.
@@ -618,8 +570,6 @@ class Fitter():
 
             skip_psi_kl: If true, kl divergences between posteriors and the prior for the private variances are not
             calculated.
-
-            skip_s_kl: If true, kl divergences between posteriors and the prior for the scales are not calculated.
 
             update_int: The number of epochs after which we provide the user with a status update.  If None,
             no updates will be printed.
@@ -661,11 +611,6 @@ class Fitter():
                 psi_kl: A numpy array of shape n_epochs*n_models.  psi_kl[e_i,m_i] is the kl divergence
                 between the prior distribution over private variances and the posterior averaged across batches after
                 epoch e_i for model m_i
-
-                s_kl: A numpy array of shape n_epochs*n_models.  s_kl[e_i,m_i] is the kl divergence
-                between the prior distribution over scales and the posterior averaged across batches after
-                epoch e_i for model m_i
-
         """
 
         if cp_epochs is None:
@@ -696,7 +641,6 @@ class Fitter():
             skip_mn_kl = True
             skip_lm_kl = True
             skip_psi_kl = True
-            skip_s_kl = True
 
         # Make sure we have no duplicate parameters
         params = list(set(params))
@@ -714,7 +658,6 @@ class Fitter():
         lm_kl_log = np.zeros([n_epochs, self.n_mdls])
         mn_kl_log = np.zeros([n_epochs, self.n_mdls])
         psi_kl_log = np.zeros([n_epochs, self.n_mdls])
-        s_kl_log = np.zeros([n_epochs, self.n_mdls])
 
         # Optimization loop
         t_0 = time.time()
@@ -730,7 +673,6 @@ class Fitter():
             batch_lm_kl_log = np.zeros([n_batches, self.n_mdls])
             batch_mn_kl_log = np.zeros([n_batches, self.n_mdls])
             batch_psi_kl_log = np.zeros([n_batches, self.n_mdls])
-            batch_s_kl_log = np.zeros([n_batches, self.n_mdls])
 
             for b_i in range(n_batches):
 
@@ -751,17 +693,16 @@ class Fitter():
                     corr_f = float(model_n_data_pts[m_i])/n_batch_data_pts
                     elbo_vls_i = approximate_elbo(coll=mdl_coll, priors=self.priors, n_smps=1, inds=batch_inds,
                                                   corr_f=corr_f, skip_lm_kl=skip_lm_kl, skip_mn_kl=skip_mn_kl,
-                                                  skip_psi_kl=skip_psi_kl, skip_s_kl=skip_s_kl)
+                                                  skip_psi_kl=skip_psi_kl)
 
                     nell = -1*elbo_vls_i['ell']
                     latent_kl = elbo_vls_i['latent_kl']
                     lm_kl = elbo_vls_i['lm_kl']
                     mn_kl = elbo_vls_i['mn_kl']
                     psi_kl = elbo_vls_i['psi_kl']
-                    s_kl = elbo_vls_i['s_kl']
 
                     # Calculate gradients for this batch
-                    mdl_obj = nell + latent_kl + lm_kl + mn_kl + psi_kl + s_kl
+                    mdl_obj = nell + latent_kl + lm_kl + mn_kl + psi_kl
                     mdl_obj.backward()
                     obj += get_scalar_vl(mdl_obj)
 
@@ -772,7 +713,6 @@ class Fitter():
                     batch_lm_kl_log[b_i, m_i] = get_scalar_vl(lm_kl)
                     batch_mn_kl_log[b_i, m_i] = get_scalar_vl(mn_kl)
                     batch_psi_kl_log[b_i, m_i] = get_scalar_vl(psi_kl)
-                    batch_s_kl_log[b_i, m_i] = get_scalar_vl(s_kl)
 
                 optimizer.step()
 
@@ -788,14 +728,13 @@ class Fitter():
             lm_kl_log[e_i, :] = np.mean(batch_lm_kl_log, axis=0)
             mn_kl_log[e_i, :] = np.mean(batch_mn_kl_log, axis=0)
             psi_kl_log[e_i, :] = np.mean(batch_psi_kl_log, axis=0)
-            s_kl_log[e_i, :] = np.mean(batch_s_kl_log, axis=0)
 
             if (update_int is not None) and (e_i % update_int == 0):
                 t_now = time.time()
                 self._print_status_update(epoch_i=e_i, obj_v=obj_log[e_i], nell_v=nell_log[e_i, :],
                                           latent_kl_v=latent_kl_log[e_i, :], lm_kl_v=lm_kl_log[e_i, :],
                                           mn_kl_v=mn_kl_log[e_i, :], psi_kl_v=psi_kl_log[e_i, :],
-                                          s_kl_v=s_kl_log[e_i, :], lr=get_lr(optimizer), t=t_now - t_0)
+                                          lr=get_lr(optimizer), t=t_now - t_0)
 
             scheduler.step()
 
@@ -806,7 +745,7 @@ class Fitter():
 
         # Generate final log structure
         log = {'obj': obj_log, 'nell': nell_log, 'latent_kl': latent_kl_log, 'lm_kl': lm_kl_log,
-               'mn_kl': mn_kl_log, 'psi_kl': psi_kl_log, 's_kl': s_kl_log}
+               'mn_kl': mn_kl_log, 'psi_kl': psi_kl_log}
 
         return log
 
@@ -888,8 +827,8 @@ class Fitter():
     def plot_log(log: dict):
         """ Generates a figure showing logged values. """
 
-        POSSIBLE_FIELDS = ['obj', 'nell', 'latent_kl', 'lm_kl', 'mn_kl', 'psi_kl', 's_kl']
-        FIELD_LABELS = ['Objective', 'NELL', 'Latent KL', 'LM KL', 'Mn KL', 'Psi KL', 'S KL']
+        POSSIBLE_FIELDS = ['obj', 'nell', 'latent_kl', 'lm_kl', 'mn_kl', 'psi_kl']
+        FIELD_LABELS = ['Objective', 'NELL', 'Latent KL', 'LM KL', 'Mn KL', 'Psi KL']
 
         n_possible_fields = len(POSSIBLE_FIELDS)
 
@@ -939,7 +878,7 @@ class Fitter():
 
         print('Saved check point for epoch ' + str(epoch) + '.')
 
-    def _print_status_update(self, epoch_i, obj_v, nell_v, latent_kl_v, lm_kl_v, mn_kl_v, psi_kl_v, s_kl_v, lr, t):
+    def _print_status_update(self, epoch_i, obj_v, nell_v, latent_kl_v, lm_kl_v, mn_kl_v, psi_kl_v, lr, t):
         """ Prints a formatted status update to the screen. """
 
         print('')
@@ -953,7 +892,6 @@ class Fitter():
         print('LM KL: ' + list_to_str(lm_kl_v))
         print('Mn KL: ' + list_to_str(mn_kl_v))
         print('Psi KL: ' + list_to_str(psi_kl_v))
-        print('S KL: ' + list_to_str(s_kl_v))
         print('----------------------------------------')
         print('LR: ' + str(lr))
         print('Elapsed time (secs): ' + str(t))
@@ -978,8 +916,7 @@ class PosteriorCollection():
     """
 
     def __init__(self, latent_post: SampleLatentsGaussianVariationalPosterior, lm_post: OptionalDistribution = None,
-                 mn_post: OptionalDistribution = None, psi_post: OptionalDistribution = None,
-                 s_post: OptionalDistribution = None):
+                 mn_post: OptionalDistribution = None, psi_post: OptionalDistribution = None):
         """ Creates a new PosteriorCollection.
 
         Args:
@@ -992,15 +929,12 @@ class PosteriorCollection():
 
             psi_post: The posterior over private variances.
 
-            s_post: The posterior over the scales parameters.
-
         """
 
         self.latent_post = latent_post
         self.lm_post = lm_post
         self.mn_post = mn_post
         self.psi_post = psi_post
-        self.s_post = s_post
 
     @staticmethod
     def from_checkpont(cp: dict) -> 'PosteriorCollection':
@@ -1016,7 +950,7 @@ class PosteriorCollection():
         """
 
         return PosteriorCollection(latent_post=cp['latent_post'], lm_post=cp['lm_post'], mn_post=cp['mn_post'],
-                                   psi_post=cp['psi_post'], s_post=cp['s_post'])
+                                   psi_post=cp['psi_post'])
 
     def generate_checkpoint(self):
         """ Generates a check point of the collection.
@@ -1024,7 +958,7 @@ class PosteriorCollection():
         The posteriors will be returned on cpu.
 
         Returns:
-            cp: A dictionary with the keys 'latent_post', 'lm_post', 'mn_post', 'psi_post' and 's_post' with the
+            cp: A dictionary with the keys 'latent_post', 'lm_post', 'mn_post' and 'psi_post'with the
             posteriors for the latents, loading matrices, mean and private variances, respectively.
         """
 
@@ -1033,8 +967,7 @@ class PosteriorCollection():
         cp = {'latent_post': copy.deepcopy(self.latent_post),
               'lm_post': copy.deepcopy(self.lm_post),
               'mn_post': copy.deepcopy(self.mn_post),
-              'psi_post': copy.deepcopy(self.psi_post),
-              's_post': copy.deepcopy(self.s_post)}
+              'psi_post': copy.deepcopy(self.psi_post)}
 
         self.to(cur_device)
 
@@ -1051,8 +984,6 @@ class PosteriorCollection():
             self.mn_post.to(device)
         if self.psi_post is not None:
             self.psi_post.to(device)
-        if self.s_post is not None:
-            self.s_post.to(device)
 
     def parameters(self) -> List[torch.nn.Parameter]:
         """ Returns all parameters in all distributions in the collection. """
@@ -1073,13 +1004,7 @@ class PosteriorCollection():
         else:
             psi_post_parameters = []
 
-        if self.s_post is not None:
-            s_post_parameters = list(self.s_post.parameters())
-        else:
-            s_post_parameters = []
-
-        return (latent_post_parameters + lm_post_parameters + mn_post_parameters + psi_post_parameters +
-                s_post_parameters)
+        return latent_post_parameters + lm_post_parameters + mn_post_parameters + psi_post_parameters
 
 
 class PriorCollection():
@@ -1091,7 +1016,7 @@ class PriorCollection():
     """
 
     def __init__(self, lm_prior: OptionalDistribution = None, mn_prior: OptionalDistribution = None,
-                 psi_prior: OptionalDistribution = None, s_prior: OptionalDistribution = None):
+                 psi_prior: OptionalDistribution = None):
         """ Creates a new PriorCollection.
 
         Args:
@@ -1102,13 +1027,11 @@ class PriorCollection():
 
             psi_prior: The conditional prior over private variances.
 
-            s_prior: The conditional prior over scale parameters
         """
 
         self.lm_prior = lm_prior
         self.mn_prior = mn_prior
         self.psi_prior = psi_prior
-        self.s_prior = s_prior
 
     def device(self) -> torch.device:
         """ Returns the device the priors are on.
@@ -1139,8 +1062,7 @@ class PriorCollection():
             coll: The new collection
         """
 
-        return PriorCollection(lm_prior=cp['lm_prior'], mn_prior=cp['mn_prior'], psi_prior=cp['psi_prior'],
-                               s_prior=cp['s_prior'])
+        return PriorCollection(lm_prior=cp['lm_prior'], mn_prior=cp['mn_prior'], psi_prior=cp['psi_prior'])
 
     def generate_checkpoint(self):
         """ Generates a check point of the collection.
@@ -1153,8 +1075,7 @@ class PriorCollection():
         """
 
         move = False
-        if not ((self.lm_prior is None) and (self.mn_prior is None) and (self.psi_prior is None)
-                and (self.s_prior is None)):
+        if not ((self.lm_prior is None) and (self.mn_prior is None) and (self.psi_prior is None)):
             move = True
 
         if move:
@@ -1163,8 +1084,7 @@ class PriorCollection():
 
         cp = {'lm_prior': copy.deepcopy(self.lm_prior),
               'mn_prior': copy.deepcopy(self.mn_prior),
-              'psi_prior': copy.deepcopy(self.psi_prior),
-              's_prior': copy.deepcopy(self.s_prior)}
+              'psi_prior': copy.deepcopy(self.psi_prior)}
 
         if move:
             self.to(cur_device)
@@ -1180,8 +1100,6 @@ class PriorCollection():
             self.mn_prior.to(device)
         if self.psi_prior is not None:
             self.psi_prior.to(device)
-        if self.s_prior is not None:
-            self.s_prior.to(device)
 
     def parameters(self) -> List[torch.nn.Parameter]:
         """ Returns all parameters present in all priors in the collection. """
@@ -1201,12 +1119,7 @@ class PriorCollection():
         else:
             psi_parameters = []
 
-        if self.s_prior is not None:
-            s_parameters = list(self.s_prior.parameters())
-        else:
-            s_parameters = []
-
-        return lm_parameters + mn_parameters + psi_parameters + s_parameters
+        return lm_parameters + mn_parameters + psi_parameters
 
 
 def synthesize_fa_mdls(data: List[torch.Tensor], props: List[torch.Tensor], n_latent_vars: int,
@@ -1326,9 +1239,8 @@ def synthesize_fa_mdls(data: List[torch.Tensor], props: List[torch.Tensor], n_la
                 posts.lm_post.dists[d_i].mn_f.f.vl.data = copy.deepcopy(lm_prior_mn)
                 posts.lm_post.dists[d_i].std_f.f.set_value(copy.deepcopy(lm_prior_std.numpy()))
 
-        # Initialize the posteriors for the private variances, scales and latents
+        # Initialize the posteriors for the private variances and latents
         posts.psi_post = copy.deepcopy(sp_posteriors[i].psi_post)
-        posts.s_post = copy.deepcopy(sp_posteriors[i].s_post)
         posts.latent_post = copy.deepcopy(sp_posteriors[i].latent_post)
 
     # ==================================================================================================================
@@ -1454,7 +1366,7 @@ class VICollection():
 
 def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, min_psi: float = .0001,
                      inds: torch.Tensor = None, corr_f: float = 1.0, skip_lm_kl: bool = False,
-                     skip_mn_kl: bool = False, skip_psi_kl: bool = False, skip_s_kl: bool = False) -> dict:
+                     skip_mn_kl: bool = False, skip_psi_kl: bool = False) -> dict:
     """ Approximates the ELBO for a single model via sampling.
 
     Calculations will be performed on whatever device the vi collection is on.
@@ -1483,8 +1395,6 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
         skip_psi_kl: True if KL divergence between the prior and posteriors over private noise variances should not be
         included in the ELBO
 
-        skip_s_kl: True if KL divergence between the prior and posteriors over scales should not be included in the ELBO
-
     Returns:
 
         elbo_vls: A dictionary with the following keys:
@@ -1501,8 +1411,6 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
 
             psi_kl: The kl divergence between the prior and posterior over the nosie variances
 
-            s_kl: The kl divergence between the prior and posterior over the noise variances
-
     """
 
     # Move the priors to the same device the VI collection is on
@@ -1514,7 +1422,6 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
     lm_point_estimate = coll.mdl.lm is not None
     mn_point_estimate = coll.mdl.mn is not None
     psi_point_estimate = coll.mdl.psi is not None
-    s_point_estimate = coll.mdl.s is not None
 
     data = coll.data
     posteriors = coll.posteriors
@@ -1555,16 +1462,10 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
         else:
             psi_standard_smp = None
 
-        if not s_point_estimate:
-            s_compact_smp, s_standard_smp = _sample_posterior(post=posteriors.s_post, props=props)
-            s_standard_smp = s_standard_smp.squeeze()
-        else:
-            s_standard_smp = None
-
         # Compute expected log-likelihood
         sel_data = data[inds, :].to(compute_device)
         ell = corr_f * torch.sum(mdl.cond_log_prob(z=latents_smp, x=sel_data, lm=lm_standard_smp,
-                                                      mn=mn_standard_smp, psi=psi_standard_smp, s=s_standard_smp))
+                                                      mn=mn_standard_smp, psi=psi_standard_smp))
 
         # Compute KL divergences
         latent_kl = corr_f * posteriors.latent_post.kl_btw_standard_normal(inds=inds)
@@ -1581,13 +1482,9 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
             psi_kl = torch.sum(posteriors.psi_post.kl(d_2=priors.psi_prior, x=props, smp=psi_compact_smp))
         else:
             psi_kl = 0
-        if (not s_point_estimate) and (not skip_s_kl):
-            s_kl = torch.sum(posteriors.s_post.kl(d_2=priors.s_prior, x=props, smp=s_compact_smp))
-        else:
-            s_kl = 0
 
         # Calculate elbo for this sample
-        elbo += ell - latent_kl - lm_kl - mn_kl - psi_kl - s_kl
+        elbo += ell - latent_kl - lm_kl - mn_kl - psi_kl
 
     elbo = elbo/n_smps
 
@@ -1595,8 +1492,7 @@ def approximate_elbo(coll: VICollection, priors: PriorCollection, n_smps: int, m
     if orig_prior_device is not None:
         priors.to(orig_prior_device)
 
-    return {'elbo': elbo, 'ell': ell, 'latent_kl': latent_kl, 'lm_kl': lm_kl, 'mn_kl': mn_kl, 'psi_kl': psi_kl,
-            's_kl': s_kl}
+    return {'elbo': elbo, 'ell': ell, 'latent_kl': latent_kl, 'lm_kl': lm_kl, 'mn_kl': mn_kl, 'psi_kl': psi_kl}
 
 
 def evaluate_check_points(cp_folder: StrOrPath, data: Sequence[torch.Tensor], props: Sequence[torch.Tensor],
@@ -1706,8 +1602,7 @@ def generate_simple_prior_collection(n_prop_vars: int, n_intermediate_latent_var
                                      lm_mn_w_init_std: float = .01, lm_std_w_init_std: float = .01,
                                      mn_mn_w_init_std: float = .01, mn_std_w_init_std: float = .01,
                                      psi_conc_f_w_init_std: float = 1, psi_rate_f_w_init_std: float = .01,
-                                     psi_conc_bias_mn: float = 10.0, psi_rate_bias_mn: float = 10.0,
-                                     s_mn: float = 1.0, s_std: float = .1) -> PriorCollection:
+                                     psi_conc_bias_mn: float = 10.0, psi_rate_bias_mn: float = 10.0) -> PriorCollection:
     """ Generates conditional priors where simple functions of properties generate distribution parameters.
 
     The conditional priors over the coefficients of the loading matrix and mean vectors will be Gaussian, with:
@@ -1804,11 +1699,8 @@ def generate_simple_prior_collection(n_prop_vars: int, n_intermediate_latent_var
     psi_prior = CondGammaDistribution(conc_f=psi_conc_f, rate_f=psi_rate_f)
 
     # Generate prior for scales
-    s_mn_f = ConstantRealFcn(init_vl=torch.tensor([s_mn]), learnable_values=False)
-    s_std_f = ConstantRealFcn(init_vl=torch.tensor([s_std]), learnable_values=False)
-    s_prior = CondGaussianDistribution(mn_f=s_mn_f, std_f=s_std_f)
 
-    return PriorCollection(lm_prior=lm_prior, mn_prior=mn_prior, psi_prior=psi_prior, s_prior=s_prior)
+    return PriorCollection(lm_prior=lm_prior, mn_prior=mn_prior, psi_prior=psi_prior)
 
 
 def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_params: dict, min_gaussian_std: float = .01,
@@ -1817,8 +1709,7 @@ def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_para
                                         mn_mn_init: float = 0.0, mn_std_init: float = .1,
                                         psi_conc_vl_init: float = 10.0,
                                         psi_rate_vl_init: float = 10.0,
-                                        learnable_stds: bool = True,
-                                        s_mn: float = 1.0, s_std: float = 1.0) -> PriorCollection:
+                                        learnable_stds: bool = True) -> PriorCollection:
     """ Generates conditional priors where sums of hypercube functions of properties generate distribution parameters.
 
     The conditional prior over the coefficients of the loading matrix will be Gaussian, with:
@@ -1879,10 +1770,6 @@ def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_para
         learnable_stds: True if the functions determining the standard deviations should have learnable parameters or
         not.  Setting this to false, results in conditional distributions with non-learnable standard deviations.
 
-        s_mn: Mean for the prior on scales.
-
-        s_std: Standard deviation on the prior on scales.
-
     Returns:
 
         priors: The generated collection of priors.
@@ -1922,18 +1809,12 @@ def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_para
 
     psi_prior = CondGammaDistribution(conc_f=psi_conc_f, rate_f=psi_rate_f)
 
-    # Generate prior for scales
-    s_mn_f = ConstantRealFcn(init_vl=torch.tensor([s_mn]), learnable_values=False)
-    s_std_f = ConstantRealFcn(init_vl=torch.tensor([s_std]), learnable_values=False)
-    s_prior = CondGaussianDistribution(mn_f=s_mn_f, std_f=s_std_f)
-
-    return PriorCollection(lm_prior=lm_prior, mn_prior=mn_prior, psi_prior=psi_prior, s_prior=s_prior)
+    return PriorCollection(lm_prior=lm_prior, mn_prior=mn_prior, psi_prior=psi_prior)
 
 
 def generate_basic_posteriors(n_obs_vars: Sequence[int], n_smps: Sequence[int], n_latent_vars: int,
                               n_intermediate_latent_vars: int, lm_opts: OptionalDict = None,
-                              mn_opts: OptionalDict = None, psi_opts: OptionalDict = None,
-                              s_opts: OptionalDict = None) -> List[PosteriorCollection]:
+                              mn_opts: OptionalDict = None, psi_opts: OptionalDict = None) -> List[PosteriorCollection]:
     """ Generates basic posteriors over model parameters and latents for a set of models.
 
     By basic posteriors, we mean the posteriors are not conditioned on properties but instead
@@ -1966,9 +1847,6 @@ def generate_basic_posteriors(n_obs_vars: Sequence[int], n_smps: Sequence[int], 
         psi_opts: Dictionary of options to provide to GammaProductDistribution when creating the
         posteriors over private variances.  See that object for available options.
 
-        s_opts: Dictionary of options to provide to MatrixGaussianProductDistribution when creating the
-        posteriors over mean vectors.  See that object for available options.
-
     Returns:
 
         post_collections: post_colletions[i] contains the posterior collections for subject i.
@@ -1981,8 +1859,6 @@ def generate_basic_posteriors(n_obs_vars: Sequence[int], n_smps: Sequence[int], 
         mn_opts = dict()
     if psi_opts is None:
         psi_opts = dict()
-    if s_opts is None:
-        s_opts = dict()
 
     n_mdls = len(n_obs_vars)
     post_collections = [None]*n_mdls
@@ -1992,10 +1868,9 @@ def generate_basic_posteriors(n_obs_vars: Sequence[int], n_smps: Sequence[int], 
         lm_post = MatrixGaussianProductDistribution(shape=[n_i, n_intermediate_latent_vars], **lm_opts)
         mn_post = MatrixGaussianProductDistribution(shape=[n_i, 1], **mn_opts)
         psi_post = GammaProductDistribution(n_vars=n_i, **psi_opts)
-        s_post = MatrixGaussianProductDistribution(shape=[n_i, 1], **s_opts)
 
         post_collections[i] = PosteriorCollection(latent_post=latent_post, lm_post=lm_post, mn_post=mn_post,
-                                                  psi_post=psi_post, s_post=s_post)
+                                                  psi_post=psi_post)
 
     return post_collections
 
@@ -2043,8 +1918,7 @@ def infer_latents(n_latent_vars: int, vi_collection: VICollection, data: torch.T
     compute_posteriors = PosteriorCollection(latent_post=latent_post,
                                              lm_post=vi_collection.posteriors.lm_post,
                                              mn_post=vi_collection.posteriors.mn_post,
-                                             psi_post=vi_collection.posteriors.psi_post,
-                                             s_post=vi_collection.posteriors.s_post)
+                                             psi_post=vi_collection.posteriors.psi_post)
 
     compute_vi_collection = VICollection(data=data, props=vi_collection.props, mdl=vi_collection.mdl,
                                          posteriors=compute_posteriors)

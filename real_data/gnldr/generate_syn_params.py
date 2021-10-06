@@ -21,8 +21,8 @@ ps['note'] = 'Initial testing.'
 ps['param_filename'] = 'transfer_params.pkl'
 
 # Directory where we should save these parameters
-#ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/testing/gnldr/across_cond_results/v1'
-ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/same_cond_transfer_analysis/v0'
+ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v0'
+#ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/same_cond_transfer_analysis/v2'
 
 # ======================================================================================================================
 #   Specify where results will be saved
@@ -49,8 +49,8 @@ ps['data_dir'] = r'/groups/bishop/bishoplab/projects/ahrens_wbo/data'
 ps['segment_table_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data'
 
 # File with the segment table in it
-ps['segment_table_file'] = r'phototaxis_ns_subjects_1_2_5_6_8_9_10_11.pkl'
-#ps['segment_table_file'] = r'omr_l_r_f_ns_across_cond_segments_8_9_10_11.pkl'
+#ps['segment_table_file'] = r'phototaxis_ns_subjects_1_2_5_6_8_9_10_11.pkl'
+ps['segment_table_file'] = r'omr_l_r_f_ns_across_cond_segments_8_9_10_11.pkl'
 
 # Folder with the fold structure in it
 ps['fold_str_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data'
@@ -83,7 +83,7 @@ ps['roi_dim_ranges'] = np.asarray([[0, 1407],
 ps['mdl_opts'] = dict()
 
 # Number of latent variables in the FA models
-ps['mdl_opts']['n_latent_vars'] = 50
+ps['mdl_opts']['n_latent_vars'] = 10
 
 # Options for for generating the prior on the weights
 hc_params = {'n_divisions_per_dim': [70, 25, 10],
@@ -114,10 +114,6 @@ ps['mdl_opts']['prior_opts'] = {
                                 'psi_rate_vl_init': 10.0,
                                 # False if standard deviations of distributions should be fixed (non-learnable)
                                 'learnable_stds': True,
-                                # Mean for the prior on scales
-                                's_mn': 1.0,
-                                # Standard deviation for the prior on scales
-                                's_std': .0001
                                 }
 
 # Options for setting up posteriors
@@ -138,12 +134,6 @@ ps['mdl_opts']['post_opts'] = {
                                            'alpha_iv': 10.0,  # Used to be 5
                                            'beta_lb': 1E-5,
                                            'beta_iv': 10.0},  # Used to be 5
-                              # Options for the posteriors on scales
-                              's_opts': {'mn_mn': 1.0,
-                                         'mn_std': 1E-8,
-                                         'std_lb': 1E-8,  # Used to be 1E-5
-                                         'std_ub': 1E-3,
-                                         'std_iv': 1E-4}
                              }
 
 # Options for fitting shared posterior models
@@ -151,8 +141,8 @@ ps['mdl_opts']['sp_fit_opts'] = [{'n_epochs': 1000, 'milestones': [500], 'update
                                   'cp_epochs': list(range(0, 1000, 100)) + [999]} for _ in range(1)]
 
 # Options for fitting individual posterior models
-ps['mdl_opts']['ip_fit_opts'] = [{'n_epochs': 10000, 'milestones': [500], 'update_int': 100, 'init_lr': .01,
-                                  'cp_epochs': list(range(0, 10000, 500)) + [9999]} for _ in range(1)]
+ps['mdl_opts']['ip_fit_opts'] = [{'n_epochs': 2000, 'milestones': [500], 'update_int': 100, 'init_lr': .01,
+                                  'cp_epochs': list(range(0, 2000, 100)) + [1999]} for _ in range(1)]
 
 # ======================================================================================================================
 # Save the parameters
