@@ -61,7 +61,7 @@ if parse_bool_str(args.sp):
 early_stopping = parse_bool_str(args.early_stopping)
 
 # Only post process results if we can't find any existing post processed results
-if not os.path.exists(save_file):
+if True: #not os.path.exists(save_file):
 
     # ==================================================================================================================
     # Post process results

@@ -131,9 +131,9 @@ ps['mdl_opts']['post_opts'] = {
                                           'std_ub': 10.0,
                                           'std_iv': 1E-4},
                               'psi_opts': {'alpha_lb': 1.0,
-                                           'alpha_iv': 10.0,  # Used to be 5
+                                           'alpha_iv': 10.0,
                                            'beta_lb': 1E-5,
-                                           'beta_iv': 10.0},  # Used to be 5
+                                           'beta_iv': 10.0},
                              }
 
 # Options for fitting shared posterior models

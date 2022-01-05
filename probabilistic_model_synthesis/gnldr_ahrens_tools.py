@@ -256,7 +256,7 @@ def post_process(results_file: str, early_stopping_subjects: Sequence[int] = Non
             cur_start += n_vars_n
 
         # ==============================================================================================================
-        # Calculate ELBO on train, validation and test data for evaluation model
+        # Calculate ELBO on train, validation and test data for evaluation checkpoint
         print_heading('Calculating ELBO for train, validation and test data for evaluation check point.')
 
         elbo_vls = dict()
@@ -270,7 +270,8 @@ def post_process(results_file: str, early_stopping_subjects: Sequence[int] = Non
                     eval_coll_i.to(device)
                     eval_priors.to(device)
                     with torch.no_grad():
-                        subj_elbo[cv_string] = approximate_elbo(coll=eval_coll_i, priors=eval_priors, n_smps=n_elbo_smps)
+                        cur_elbo = approximate_elbo(coll=eval_coll_i, priors=eval_priors, n_smps=n_elbo_smps)
+                        subj_elbo[cv_string] = {'vl': cur_elbo, 'n_smps': eval_coll_i.data.shape[0]}
                     print('Done estimating ELBO for subject ' + str(s_n) + ', ' + cv_string + '.')
                 else:
                     subj_elbo[cv_string] = None
@@ -301,8 +302,10 @@ def post_process(results_file: str, early_stopping_subjects: Sequence[int] = Non
                             eval_coll_i.to(device)
                             eval_priors.to(device)
                             with torch.no_grad():
-                                period_elbo_vls[s_n][test_period] = approximate_elbo(coll=eval_coll_i, priors=eval_priors,
-                                                                                     n_smps=n_elbo_smps)
+                                cur_elbo = approximate_elbo(coll=eval_coll_i, priors=eval_priors,
+                                                            n_smps=n_elbo_smps)
+                                period_elbo_vls[s_n][test_period] = {'vl': cur_elbo,
+                                                                     'n_smps': eval_coll_i.data.shape[0]}
                             eval_coll_i.to(torch.device('cpu'))
                         else:
                             period_elbo_vls[s_n][test_period] = None

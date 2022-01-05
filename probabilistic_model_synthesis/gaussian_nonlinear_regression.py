@@ -1144,7 +1144,8 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
                               s_out_prior_opts: dict, b_out_prior_opts: dict, psi_prior_opts: dict,
                               s_in_post_opts: dict, b_in_post_opts: dict, s_out_post_opts: dict,
                               b_out_post_opts: dict, psi_post_opts: dict, dense_net_opts: dict,
-                              sp_fit_opts: Sequence[dict], ip_fit_opts: Sequence[dict]) -> dict:
+                              sp_fit_opts: Sequence[dict], ip_fit_opts: Sequence[dict],
+                              sp_fixed_var: bool = False) -> dict:
     """ Wrapper function to setup models and fit them to data for multiple systems using hypercube priors over weights.
 
     Args:
@@ -1197,6 +1198,9 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
         ip_fit_opts: ip_fit_opts[i] are the options to the call to fit for the i^th round of fitting
         individual-posterior models
 
+        sp_fixed_var: True if the variance of the shared posteriors in the sp fitting stage should be fixed to
+        their initial value.
+
     Returns: Results of the fitting.  This will be a dictionary with entires 'sp' and 'ip' containing results of
     fitting the shared and individual posterior models respectively.  Each will itself be a dictionary with the
     keys 'vi_collections', 'priors' and 'logs' holding the fit vi collections, priors and fitting logs.
@@ -1233,6 +1237,13 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
                                                     s_out_prior_opts=s_out_prior_opts,
                                                     b_out_prior_opts=b_out_prior_opts, psi_prior_opts=psi_prior_opts,
                                                     learnable_scales_and_biases=False)
+
+    # Fixed the variance of the sp prior if we are suppose to
+    if sp_fixed_var:
+        print('Fixing variance of sp w_prior.')
+        for d in sp_priors.w_prior.dists:
+            for param in d.std_f.parameters():
+                param.requires_grad = False
 
     # Setup the posteriors
     sp_posteriors = generate_basic_posteriors(n_input_vars=ind_n_vars, p=p, n_pred_vars=n_pred_vars,
@@ -1277,6 +1288,13 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
 
     # We initialize the priors for ip training to those we learned in sp training
     ip_priors = copy.deepcopy(sp_priors)
+
+    # Set the variance of ip posteriors for weights to be learnable if we need to
+    if sp_fixed_var:
+        print('Fixing variance of sp w_prior.')
+        for d in ip_priors.w_prior.dists:
+            for param in d.std_f.parameters():
+                param.requires_grad = True
 
     # Create the posteriors for ip training, we will initialize these later
     ip_posteriors = generate_basic_posteriors(n_input_vars=ind_n_vars, p=p, n_pred_vars=n_pred_vars,
@@ -1323,7 +1341,7 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
                          for s in range(n_systems)]
 
     # ==================================================================================================================
-    # Perform sp fitting
+    # Perform ip fitting
     # ==================================================================================================================
     print('Beginning IP fitting.')
     ip_fitter = Fitter(vi_collections=ip_vi_collections, priors=ip_priors, devices=devices)
@@ -1332,6 +1350,8 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
     prev_ip_epochs = [0] + [fit_opts['n_epochs'] for fit_opts in ip_fit_opts]
     ip_logs = [ip_fitter.fit(**fit_opts, prev_epochs=prev_epochs)
                for prev_epochs, fit_opts in zip(prev_ip_epochs, ip_fit_opts)]
+
+
     ip_fitter.distribute(distribute_data=True, devices=[torch.device('cpu')])
 
     # ==================================================================================================================

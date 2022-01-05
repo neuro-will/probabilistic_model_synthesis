@@ -15,7 +15,7 @@ import time
 # ======================================================================================================================
 
 # Specify if we should run the fits
-FIT = True
+FIT = False
 
 # Specify if we should run post processing
 POST_PROCESS = True
