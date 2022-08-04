@@ -82,6 +82,13 @@ def generate_sum_of_bump_fcns_dist(n_bump_fcns: int, d_in: int, p: int, dim_rang
     return CondMatrixProductDistribution(dists=dists)
 
 
+class IncreasingSinFcn(torch.nn.Module):
+    """ Implements the function x + sin(3x) """
+
+    def forward(self, x) -> torch.Tensor:
+        return x + torch.sin(3*x)
+
+
 def sample_proj_data_from_cone(n_smps: np.ndarray, w: np.ndarray, ang_range: Sequence[float]) -> np.ndarray:
     """ Generates samples from a standard normal, which when projected into 2-dimensions, fall within a cone region.
 
@@ -500,3 +507,21 @@ def calc_mean_and_std_in_grid(locs: np.ndarray, vls: np.ndarray, grid_dims: np.n
 
     return mns, stds
 
+
+class SqFcn(torch.nn.Module):
+    """ A torch module that implements the function y = x**2. """
+
+    def __init__(self):
+        """ Creates a new SqFcn object. """
+        super().__init__()
+
+    def forward(self, x) -> torch.Tensor:
+        """ Computes output from input.
+
+        Args:
+            x: Input, of any shape
+
+        Returns
+            y: Output, same shape as input
+        """
+        return x**2
