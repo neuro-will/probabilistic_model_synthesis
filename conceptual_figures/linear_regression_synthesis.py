@@ -23,7 +23,7 @@ true_beta_std = torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0], dtype=torch.float32)
 obs_std = .1
 
 # Number of example systems we generate
-n_ex_systems = 100
+n_ex_systems = 1000
 
 # Number of samples we observe from each example system
 n_smps_per_system = 2
@@ -54,7 +54,7 @@ for s_i, beta_i in enumerate(true_ex_system_weights):
 # Initialize CPD - the mean and standard deviation functions are just constant
 # since we have no properties to condition on
 cpd = CondGaussianDistribution(mn_f=ConstantRealFcn(np.ones([x_dim])),
-                               std_f=ConstantBoundedFcn(.000001*np.ones([x_dim]),
+                               std_f=ConstantBoundedFcn(.01*np.ones([x_dim]),
                                                         10*np.ones([x_dim]),
                                                         3*np.ones([x_dim])))
 
@@ -74,7 +74,7 @@ params = list(cpd.parameters()) + list(itertools.chain(*[list(post.parameters())
 
 # Setup optimizer
 optimizer = torch.optim.Adam(params=params, lr=.1)
-
+scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[4000], gamma=.1)
 # Constant for calculating log-likelihoods
 constant = -.5*n_smps_per_system*np.log(2*np.pi*(obs_std**2))
 
@@ -103,6 +103,8 @@ for i in range(n_train_its):
 
     if i % 100 == 0:
         print('It: ' + str(i) + ', ELBO: ' + str(elbo.item()))
+
+    scheduler.step()
 
 # ======================================================================================================================
 # Examine results
