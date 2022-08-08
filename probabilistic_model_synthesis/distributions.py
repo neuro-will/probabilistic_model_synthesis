@@ -231,6 +231,35 @@ class SampleLatentsGaussianVariationalPosterior(torch.nn.Module):
 
         return .5 * (cov_trace_sum + m_norm_sum - m_sum - log_det_sum)
 
+    def kl_btw_diagonal_normal(self, inds: torch.Tensor, mn_1: torch.Tensor, cov_1: torch.Tensor):
+        """ Computes KL between posterior of latent state over a set of data points and normal with diagonal covariance.
+
+        Args:
+
+            inds: Indices of data points we form the posterior of latent state over.
+
+            mn_1: The mean of the multivariate normal we compare to
+
+            cov_1: Entries along the diagonal of the covariance matrix of the normal we compare to.  Should be a
+            1-d tensor.
+
+        Returns:
+
+            kl: The kl divergence for the posterior relative to the standard normal
+        """
+
+        n_kl_data_pts = len(inds)
+
+        cov_m = self.cov()
+
+        cov_trace_sum = n_kl_data_pts*torch.trace(cov_m/cov_1)
+        m_norm_sum = torch.sum(((self.mns[inds] - mn_1)**2)/cov_1)
+        log_det_sum_1 = n_kl_data_pts*torch.sum(torch.log(cov_1))
+        log_det_sum_0 = n_kl_data_pts*torch.logdet(cov_m)
+        m_sum = n_kl_data_pts * self.m
+
+        return .5 * (cov_trace_sum + m_norm_sum - m_sum + log_det_sum_1 - log_det_sum_0)
+
     def sample(self, inds: torch.Tensor) -> torch.Tensor:
         """ Samples latent values from the posterior for given data points.
 
