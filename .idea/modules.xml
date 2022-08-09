@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/../../../ahrens_wbo/code/ahrens_wbo/.idea/ahrens_wbo.iml" filepath="$PROJECT_DIR$/../../../ahrens_wbo/code/ahrens_wbo/.idea/ahrens_wbo.iml" />
       <module fileurl="file://$PROJECT_DIR$/../../../janelia_core/.idea/janelia_core.iml" filepath="$PROJECT_DIR$/../../../janelia_core/.idea/janelia_core.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/probabilistic_model_synthesis.iml" filepath="$PROJECT_DIR$/.idea/probabilistic_model_synthesis.iml" />
     </modules>
