@@ -321,6 +321,7 @@ comb_fit_rs = fit_with_hypercube_priors(data=ind_data, props=ind_props, p=ps['p'
                                         w_prior_opts=ps['fit_w_prior_opts'],
                                         psi_prior_opts=ps['fit_psi_prior_opts'],
                                         psi_post_opts=ps['psi_post_opts'],
+                                        w_post_opts=ps['w_post_opts'],  # Sept 2 2022: WEB added this argument
                                         sp_fixed_var=True,
                                         fixed_s_in_vl=ps['s_in'],
                                         fixed_b_in_vl=ps['b_in'],

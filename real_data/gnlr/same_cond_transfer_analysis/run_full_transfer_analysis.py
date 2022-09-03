@@ -18,7 +18,7 @@ import time
 # ======================================================================================================================
 
 # Specify if we should run the fits
-FIT = False
+FIT = True
 
 # Specify if we should run post processing
 POST_PROCESS = True
@@ -26,7 +26,7 @@ POST_PROCESS = True
 # Name of files that fitting results should be in - all results will be saved in files of the same name, with the
 # folder structure being used to denote results with different settings.  The name of files containing results from
 # post processing will be of the form pp_<SAVE_FILE>.
-SAVE_FILE = 'test_results.pt'
+SAVE_FILE = 'fit_results.pt'
 
 # The base subjects, we can fit each target subject with, for the transfer analyses
 BASE_SUBJECTS = [1, 2, 5, 6]
@@ -35,10 +35,10 @@ BASE_SUBJECTS = [1, 2, 5, 6]
 TGT_SUBJECTS = [8, 10, 11]
 
 # Specify the full path to the parameter file
-PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v18/transfer_params.pkl'
+PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v22/transfer_params.pkl'
 
 # Specify the base folder into which results should be saved
-RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v18'
+RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v22'
 
 # Specify the fold structure files we should fit to
 FOLD_STR_FILES = ['fold_str_base_14_tgt_1.pkl',
@@ -58,10 +58,11 @@ IND_N_SLOTS = 3
 # Code to submit the jobs goes here
 # ======================================================================================================================
 TYPES = ['comb', 'ind']
+GPU_QUEUE = 'gpu_rtx'
 
-BASE_COMB_CALL = 'bsub -n ' + str(COMB_N_SLOTS)
-BASE_IND_CALL = 'bsub -n ' + str(IND_N_SLOTS)
-
+BASE_COMB_CALL = 'bsub -n ' + str(COMB_N_SLOTS) + ' -gpu "num=1"' + ' -q ' + GPU_QUEUE
+BASE_IND_CALL = 'bsub -n ' + str(IND_N_SLOTS) + ' -gpu "num=1"' + ' -q ' + GPU_QUEUE
+print(BASE_COMB_CALL)
 ANACONDA_SETUP = '. /groups/bishop/home/bishopw/anaconda3/etc/profile.d/conda.sh'
 ENV_SETUP = 'conda activate probabilistic_model_synthesis'
 
@@ -113,7 +114,9 @@ for fold_str_file in FOLD_STR_FILES:
                     job_command += BASE_PP_COMMAND + ' ' + results_file_path
                     save_file_path = str(type_dir / ('pp_' + pathlib.Path(SAVE_FILE).stem + '.pkl'))
                     job_command += ' ' + save_file_path
-                    job_command += ' -early_stopping_subjects ' + str(tgt_subj)
+                    #job_command += ' -early_stopping_subjects ' + str(tgt_subj)
+                    job_command += ' -early_stopping_subjects ' + fit_subjs
+                    print('Performing early stopping using validation data from all subjects.')
                     job_command += ' -early_stopping True'
 
                 call += ' -o ' + str(type_dir / 'log.txt')
