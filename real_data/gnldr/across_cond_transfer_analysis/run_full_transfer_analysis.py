@@ -15,7 +15,7 @@ import time
 # ======================================================================================================================
 
 # Specify if we should run the fits
-FIT = False
+FIT = True
 
 # Specify if we should run post processing
 POST_PROCESS = True
@@ -23,16 +23,16 @@ POST_PROCESS = True
 # Name of files that fitting results should be in - all results will be saved in files of the same name, with the
 # folder structure being used to denote results with different settings.  The name of files containing results from
 # post processing will be of the form pp_<SAVE_FILE>.
-SAVE_FILE = 'test_results.pt'
+SAVE_FILE = 'fit_results.pt'
 
 # Each of the target subjects
 TGT_SUBJECTS = [8, 9, 11]
 
 # Specify the full path to the parameter file
-PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v0/transfer_params.pkl'
+PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v1/transfer_params.pkl'
 
 # Specify the base folder into which results should be saved
-RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v0'
+RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v1'
 
 # String prepended to all files containing the fold structure we will be working with
 FOLD_STR_PRE_STR = 'ac_an'

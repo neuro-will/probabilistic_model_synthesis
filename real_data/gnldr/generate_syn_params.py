@@ -21,8 +21,7 @@ ps['note'] = 'Initial testing.'
 ps['param_filename'] = 'transfer_params.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v0'
-#ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/same_cond_transfer_analysis/v2'
+ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v1'
 
 # ======================================================================================================================
 #   Specify where results will be saved

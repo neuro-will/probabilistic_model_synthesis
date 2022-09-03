@@ -1729,13 +1729,13 @@ def generate_hypercube_prior_collection(p: int, d_pred: int, w_prior_opts: dict,
 
         learnable_scales_and_biases: True if priors on scales and biases (both in and out) should be learnable.
 
-        fixed_b_in: True if a prior for b_in parameters should not be crated.
+        fixed_b_in: True if a prior for b_in parameters should not be created.
 
-        fixed_s_in: True if a prior for s_in parameters should not be crated.
+        fixed_s_in: True if a prior for s_in parameters should not be created.
 
-        fixed_b_out: True if a prior for b_out parameters should not be crated.
+        fixed_b_out: True if a prior for b_out parameters should not be created.
 
-        fixed_s_out: True if a prior for s_out parameters should not be crated.
+        fixed_s_out: True if a prior for s_out parameters should not be created.
 
     Returns:
 

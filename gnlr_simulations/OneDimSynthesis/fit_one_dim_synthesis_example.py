@@ -115,16 +115,16 @@ ps['b_out'] = torch.tensor([0.0] * ps['d_pred'], dtype=torch.float)
 
 if ps['sim_type'] == 'props':
     #The full options for setting up the prior on weights for limited data example
-    fit_hc_params = {'n_divisions_per_dim': [100, 100],
-                     'dim_ranges': np.asarray([[-.1, 1.1],
-                                               [-.1, 1.1]]),
+    fit_hc_params = {'n_divisions_per_dim': [101, 101],
+                     'dim_ranges': np.asarray([[0, 1],  # Changed from -.1 to 1.1
+                                               [0, 1]]),
                      'n_div_per_hc_side_per_dim': [2, 2]}
 elif ps['sim_type'] == 'no_props':
     # The full options for setupping up the prior on weights for the props vs no props example 
     # Essentially, we treat all properties the same with these settings 
     fit_hc_params = {'n_divisions_per_dim': [1, 1],
-                     'dim_ranges': np.asarray([[-.1, 1.1],
-                                           [-.1, 1.1]]),
+                     'dim_ranges': np.asarray([[0, 1],
+                                               [0, 1]]),
                      'n_div_per_hc_side_per_dim': [1, 1]}
 
 if ps['sim_type'] == 'props':
@@ -134,7 +134,7 @@ if ps['sim_type'] == 'props':
 elif ps['sim_type'] == 'no_props':
     # The full options for setting up the prior on weights when we have a CPD that ignore properties
     ps['fit_w_prior_opts'] = {'mn_hc_params': fit_hc_params, 'std_hc_params': fit_hc_params,
-                              'min_std': .000001, 'mn_init': 0.0, 'std_init': .001} 
+                              'min_std': .000001, 'mn_init': 0.0, 'std_init': .01}
 
 # Options for prior on noise standard deviation
 ps['fit_psi_prior_opts'] = ps['true_psi_prior_opts']

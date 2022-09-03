@@ -11,7 +11,9 @@ ps = dict()
 # ======================================================================================================================
 # Specify a note we want to save with the parameters (to summerize/remind a user what the particular settings are for)
 # ======================================================================================================================
-ps['note'] = 'Initial testing. p=20, less hypercubes'
+ps['note'] = ('Standardizing parameters across applications. ' +
+              'Using same densenet as in synthetic example and fixed sp prior variances.' +
+              'Reducing resolution of hypercube functions.')
 
 # ======================================================================================================================
 #   Specify where these parameters are saved
@@ -21,7 +23,7 @@ ps['note'] = 'Initial testing. p=20, less hypercubes'
 ps['param_filename'] = 'transfer_params.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/across_cond_transfer_analysis/v6'
+ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v22'
 
 # ======================================================================================================================
 #   Specify where results will be saved
@@ -49,8 +51,7 @@ ps['data_dir'] = r'/groups/bishop/bishoplab/projects/ahrens_wbo/data'
 ps['segment_table_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data'
 
 # File with the segment table in it
-#ps['segment_table_file'] = r'phototaxis_ns_subjects_1_2_5_6_8_9_10_11.pkl'
-ps['segment_table_file'] = r'omr_l_r_f_ns_across_cond_segments_8_9_10_11.pkl'
+ps['segment_table_file'] = r'phototaxis_ns_subjects_1_2_5_6_8_9_10_11.pkl'
 
 # Folder with the fold structure in it
 ps['fold_str_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data'
@@ -90,10 +91,10 @@ ps['roi_dim_ranges'] = np.asarray([[0, 1407],
 ps['mdl_opts'] = dict()
 
 # Dimensionality of intermediate low-d space
-ps['mdl_opts']['p'] = 20
+ps['mdl_opts']['p'] = 10
 
 # Options for for generating the prior on the weights
-hc_params = {'n_divisions_per_dim': [70, 25, 10], #[140, 50, 20]
+hc_params = {'n_divisions_per_dim': [140, 50, 20],
              'dim_ranges': ps['roi_dim_ranges'],
              'n_div_per_hc_side_per_dim': [1, 1, 1]}
 
@@ -121,7 +122,10 @@ ps['mdl_opts']['b_out_post_opts'] = copy.deepcopy(ps['mdl_opts']['b_out_prior_op
 ps['mdl_opts']['psi_post_opts'] = copy.deepcopy(ps['mdl_opts']['psi_prior_opts'])
 
 # Options for the dense net m-module
-ps['mdl_opts']['dense_net_opts'] = {'n_layers': 5, 'growth_rate': 5, 'bias': True}
+ps['mdl_opts']['dense_net_opts'] = {'n_layers': 2, 'growth_rate': 10, 'bias': True}
+
+# Option specifying if we fix the variance of the priors when doing sp fitting
+ps['mdl_opts']['sp_fixed_var'] = True
 
 # Options for fitting calls when fitting shared posterior and individual posterior models - all options accepted by
 # the fit function can be provided here *except* the folders to save check points in, which are specified above
