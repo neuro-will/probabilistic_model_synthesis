@@ -3,6 +3,7 @@
 import copy
 import pathlib
 import pickle
+import torch
 
 import numpy as np
 
@@ -13,7 +14,7 @@ ps = dict()
 # ======================================================================================================================
 ps['note'] = ('Standardizing parameters across applications. ' +
               'Using same densenet as in synthetic example and fixed sp prior variances.' +
-              'Reducing resolution of hypercube functions.')
+              'Using fixed scales and offsets.')
 
 # ======================================================================================================================
 #   Specify where these parameters are saved
@@ -23,7 +24,7 @@ ps['note'] = ('Standardizing parameters across applications. ' +
 ps['param_filename'] = 'transfer_params.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v22'
+ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v23'
 
 # ======================================================================================================================
 #   Specify where results will be saved
@@ -102,7 +103,22 @@ hc_params = {'n_divisions_per_dim': [140, 50, 20],
 ps['mdl_opts']['w_prior_opts'] = {'mn_hc_params': hc_params, 'std_hc_params': hc_params,
                                   'min_std': .001, 'mn_init': 0.0, 'std_init': .01}
 
-# Options for priors on input and output scales and biases
+# Options for priors on input and output scales and biases.
+#
+# There are two main options here. We can fix the scales and offsets across all models, so they are not treated
+# probabilistically.  In that case, the values they should be fixed to are specified by
+# the 'fixed_<variable_name>_vl' dictionary entries below.
+#
+# However, if we want to allow the scales and offsets to vary across example systems, we should set
+# the 'fixed_<variable_name>_vl' dictionary entries to None and instead provide values for the
+# '<variable_name>_prior_opts' dictionary entries below to give the options for setting up the fixed priors over these.
+# If the 'fixed_<variable_name>_vl' entries are not None, the options for setting up the priors will be ignored.
+
+ps['mdl_opts']['fixed_s_in_vl'] = torch.tensor([.001]*ps['mdl_opts']['p'])
+ps['mdl_opts']['fixed_b_in_vl'] = torch.tensor([0.0]*ps['mdl_opts']['p'])
+ps['mdl_opts']['fixed_s_out_vl'] = torch.tensor([1.0]*len(ps['keep_beh_vars']))
+ps['mdl_opts']['fixed_b_out_vl'] = torch.tensor([0.0]*len(ps['keep_beh_vars']))
+
 ps['mdl_opts']['s_in_prior_opts'] = {'mn_mn': .001, 'mn_std': 1E-8, 'std_lb': 1E-8, 'std_ub': 1E-5, 'std_iv': 1E-6}
 ps['mdl_opts']['b_in_prior_opts'] = {'mn_mn': 0.0, 'mn_std': 1E-8, 'std_lb': 1E-8, 'std_ub': 1E-5, 'std_iv': 1E-6}
 ps['mdl_opts']['s_out_prior_opts'] = {'mn_mn': 1.0, 'mn_std': 1E-8, 'std_lb': 1E-6, 'std_ub': 1E-0, 'std_iv': 1E-4}
@@ -112,7 +128,8 @@ ps['mdl_opts']['b_out_prior_opts'] = {'mn_mn': 0.0, 'mn_std': 1E-8, 'std_lb': 1E
 ps['mdl_opts']['psi_prior_opts'] = {'conc_lb': 1.0, 'conc_ub': 1000.0, 'conc_iv': 10.0,
                                     'rate_lb': .001, 'rate_ub': 1000.0, 'rate_iv': 10.0}
 
-# Options for posteriors on input and output scales and biases
+# Options for posteriors on input and output scales and biases.  Note that these will not be used if
+# 'fixed_scales_and_offsets' above if false.
 ps['mdl_opts']['s_in_post_opts'] = copy.deepcopy(ps['mdl_opts']['s_in_prior_opts'])
 ps['mdl_opts']['b_in_post_opts'] = copy.deepcopy(ps['mdl_opts']['b_in_prior_opts'])
 ps['mdl_opts']['s_out_post_opts'] = copy.deepcopy(ps['mdl_opts']['s_out_prior_opts'])

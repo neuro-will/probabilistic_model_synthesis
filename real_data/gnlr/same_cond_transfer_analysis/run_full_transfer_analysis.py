@@ -35,10 +35,10 @@ BASE_SUBJECTS = [1, 2, 5, 6]
 TGT_SUBJECTS = [8, 10, 11]
 
 # Specify the full path to the parameter file
-PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v22/transfer_params.pkl'
+PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v23/transfer_params.pkl'
 
 # Specify the base folder into which results should be saved
-RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v22'
+RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v23'
 
 # Specify the fold structure files we should fit to
 FOLD_STR_FILES = ['fold_str_base_14_tgt_1.pkl',
