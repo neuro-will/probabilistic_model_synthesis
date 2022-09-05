@@ -1307,7 +1307,7 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
     system probabilistically or to assume these are fixed and the same for all systems.  If they should be learned
     probabilistically, full dictionaries of appropriate options should be provided to the appropriate prior and
     posterior inputs.  If they are fixed, appropriate tensors of fixed values should be provided to the appropriate
-    "fixed" arguments (see below).  If both
+    "fixed" arguments (see below).
 
     Args:
 
