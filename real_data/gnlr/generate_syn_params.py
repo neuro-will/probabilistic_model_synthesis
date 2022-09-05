@@ -100,7 +100,7 @@ hc_params = {'n_divisions_per_dim': [140, 50, 20],
 
 
 ps['mdl_opts']['w_prior_opts'] = {'mn_hc_params': hc_params, 'std_hc_params': hc_params,
-                                  'min_std': .001, 'mn_init': 0.0, 'std_init': .01}
+                                  'min_std': .000001, 'mn_init': 0.0, 'std_init': .01}
 
 # Options for priors on input and output scales and biases
 ps['mdl_opts']['s_in_prior_opts'] = {'mn_mn': .001, 'mn_std': 1E-8, 'std_lb': 1E-8, 'std_ub': 1E-5, 'std_iv': 1E-6}
@@ -110,7 +110,10 @@ ps['mdl_opts']['b_out_prior_opts'] = {'mn_mn': 0.0, 'mn_std': 1E-8, 'std_lb': 1E
 
 # Options for prior on noise variances
 ps['mdl_opts']['psi_prior_opts'] = {'conc_lb': 1.0, 'conc_ub': 1000.0, 'conc_iv': 10.0,
-                                    'rate_lb': .001, 'rate_ub': 1000.0, 'rate_iv': 10.0}
+                                    'rate_lb': .001, 'rate_ub': 100000.0, 'rate_iv': 10.0}  # WEB: rate_ub increased
+
+# Options for posterior on weights
+ps['mdl_opts']['w_post_opts'] = dict()
 
 # Options for posteriors on input and output scales and biases
 ps['mdl_opts']['s_in_post_opts'] = copy.deepcopy(ps['mdl_opts']['s_in_prior_opts'])
@@ -134,7 +137,7 @@ ps['mdl_opts']['sp_fit_opts'] = [{'n_epochs': 1000, 'n_batches': 2, 'init_lr': .
                                   'update_int': 100, 'cp_epochs': list(range(0, 1000, 500)) + [999]} for _ in range(1)]
 
 ps['mdl_opts']['ip_fit_opts'] = [{'n_epochs': 20000, 'n_batches': 2, 'init_lr': .00001, 'milestones': [10000], 'gamma': .1,
-                                  'update_int': 100, 'cp_epochs': list(range(0, 20000, 500)) + [4999]} for _ in range(1)]
+                                  'update_int': 100, 'cp_epochs': list(range(0, 20000, 500)) + [19999]} for _ in range(1)]
 
 # ======================================================================================================================
 # Save the parameters
