@@ -97,7 +97,7 @@ ps['d_pred'] = 1
 ps['true_w_prior_opts'] = {'n_bump_fcns': 50, 'd_in': 2, 'p': 1, 'mn_m_std': 1.0, 'std_m_std': .1, 'bump_w': .2}
 
 # Options for the prior on noise standard deviations
-ps['true_psi_prior_opts'] = {'conc_iv': 10.0, 'rate_iv': 1000.0, 'rate_ub': 10000.0}
+ps['true_psi_prior_opts'] = {'conc_iv': 10.0, 'rate_iv': 1000.0, 'rate_ub': 100000.0}
 
 # ===============================================================================================
 # Options for fixed scales and offsets (we don't learn these)

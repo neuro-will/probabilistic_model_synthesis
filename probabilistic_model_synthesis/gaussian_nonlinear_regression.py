@@ -1434,7 +1434,7 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
                                                     fixed_b_in=fixed_b_in, fixed_s_out=fixed_s_out,
                                                     fixed_b_out=fixed_b_out)
 
-    # Fixed the variance of the sp prior if we are suppose to
+    # Fixed the variance of the sp cpd if we are suppose to
     if sp_fixed_var:
         print('Fixing variance of sp w_prior.')
         for d in sp_priors.w_prior.dists:
