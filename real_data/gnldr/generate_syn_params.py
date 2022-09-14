@@ -11,7 +11,7 @@ ps = dict()
 # ======================================================================================================================
 # Specify a note we want to save with the parameters (to summerize/remind a user what the particular settings are for)
 # ======================================================================================================================
-ps['note'] = 'Initial testing.'
+ps['note'] = 'Changed form of non-linearities enforcing positive values of alpha and beta for prior and posteriors over standard deviations.'
 
 # ======================================================================================================================
 #   Specify where these parameters are saved
@@ -21,7 +21,7 @@ ps['note'] = 'Initial testing.'
 ps['param_filename'] = 'transfer_params.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v1'
+ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v3'
 
 # ======================================================================================================================
 #   Specify where results will be saved
@@ -95,10 +95,14 @@ ps['mdl_opts']['prior_opts'] = {
                                 'hc_params': hc_params,
                                 # Floor on std for distributions on means and loading matrices
                                 'min_gaussian_std': 1E-6,  # WEB, switched from 1E-5 to make consistent with other applications
-                                # Floor on concentration parameter for any gamma distribution
+                                # Min value concentration parameter for any gamma distribution can take on
                                 'min_gamma_conc_vl': 1.0,
-                                # Floor on rate parameter for any gamma distribution
-                                'min_gamma_rate_vl': 1E-5,
+                                # Max value concentration parameter for any gamma distribution can take on
+                                'max_gamma_conc_vl': 1E3,
+                                # Min value rate parameter can take on for any gamma distribution
+                                'min_gamma_rate_vl': .1,
+                                # Max value rate parameter can take on for any gamma distribution
+                                'max_gamma_rate_vl': 1E5,
                                 # Mean of distribution used to initialize loading matrix
                                 'lm_mn_init': 0.0,
                                 # Std of distribution used to initialize loading matrix
@@ -130,13 +134,15 @@ ps['mdl_opts']['post_opts'] = {
                                           'std_ub': 10.0,
                                           'std_iv': 1E-4},
                               'psi_opts': {'alpha_lb': 1.0,
+                                           'alpha_ub': 1E3,
                                            'alpha_iv': 10.0,
-                                           'beta_lb': 1E-5,
-                                           'beta_iv': 10.0},
+                                           'beta_lb': .1,
+                                           'beta_ub': 1E5,
+                                           'beta_iv': 10.0}
                              }
 
 # Options for fitting shared posterior models
-ps['mdl_opts']['sp_fit_opts'] = [{'n_epochs': 1000, 'milestones': [500], 'update_int': 100, 'init_lr': .1,
+ps['mdl_opts']['sp_fit_opts'] = [{'n_epochs': 1000, 'milestones': None, 'update_int': 100, 'init_lr': .01,
                                   'cp_epochs': list(range(0, 1000, 100)) + [999]} for _ in range(1)]
 
 # Options for fitting individual posterior models

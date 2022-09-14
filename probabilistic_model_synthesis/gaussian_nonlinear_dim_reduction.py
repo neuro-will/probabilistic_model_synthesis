@@ -18,6 +18,7 @@ import torch.optim
 
 
 from janelia_core.math.basic_functions import list_grid_pts
+from janelia_core.ml.extra_torch_modules import ElementWiseTanh
 from janelia_core.ml.extra_torch_modules import FixedOffsetAbs
 from janelia_core.ml.extra_torch_modules import SumOfTiledHyperCubeBasisFcns
 from janelia_core.ml.torch_distributions import CondGaussianDistribution
@@ -1704,7 +1705,8 @@ def generate_simple_prior_collection(n_prop_vars: int, n_intermediate_latent_var
 
 
 def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_params: dict, min_gaussian_std: float = .01,
-                                        min_gamma_conc_vl: float = 1.0, min_gamma_rate_vl: float = .01,
+                                        min_gamma_conc_vl: float = 1.0, max_gamma_conc_vl: float = 1E3,
+                                        min_gamma_rate_vl: float = .001, max_gamma_rate_vl: float = 1E3,
                                         lm_mn_init: float = 0.0, lm_std_init: float = .1,
                                         mn_mn_init: float = 0.0, mn_std_init: float = .1,
                                         psi_conc_vl_init: float = 10.0,
@@ -1725,7 +1727,7 @@ def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_para
         1) Means which are a sum of hypercube functions
 
         2) Standard deviations which are passed through a sum of hypercube functions (of properties),
-        and then passed through an absolute value plut a fixed offset (to prevent standard deviations from
+        and then passed through an absolute value plus a fixed offset (to prevent standard deviations from
         going below a certain bound).
 
     The conditional priors over the private variances will be Gamma distributions with:
@@ -1744,10 +1746,13 @@ def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_para
         min_gaussian_std: The floor on the standard deviation for the distributions on the coefficients of the loading
         matrix and mean vector.
 
-        min_gamma_conc_vl: The floor on values that the concentration parameter of the Gamma distributions can take
-        on.
+        min_gamma_conc_vl: The min value that the concentration parameter of the Gamma distributions can take on.
 
-        min_gamma_rate_vl: The floor on values that rate parameter of the Gamma distributions can take on.
+        max_gamma_conc_vl: The max value that the concentration parameter of the Gamma distribution can take on.
+
+        min_gamma_rate_vl: The min value that rate parameter of the Gamma distributions can take on.
+
+        max_gamma_rate_vl: The max value that rate parameter of the Gamma distributions can take on.
 
         lm_mn_init: The initial value for the mean of distributions over coefficients in the loading matrix. This
         will be a constant value for all conditioning input.
@@ -1799,13 +1804,18 @@ def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_para
     mn_prior = CondGaussianDistribution(mn_f=mn_mn_f, std_f=mn_std_f)
 
     # Generate prior for private variances
+    psi_conc_o = .5*(min_gamma_conc_vl + max_gamma_conc_vl)
+    psi_conc_s = .5*(max_gamma_conc_vl - min_gamma_conc_vl)
     psi_conc_f = torch.nn.Sequential(SumOfTiledHyperCubeBasisFcns(**hc_params),
-                                     FixedOffsetAbs(o=min_gamma_conc_vl))
-    psi_rate_f = torch.nn.Sequential(SumOfTiledHyperCubeBasisFcns(**hc_params),
-                                     FixedOffsetAbs(o=min_gamma_rate_vl))
+                                     ElementWiseTanh(o=psi_conc_o, s=psi_conc_s))
 
-    psi_conc_f[0].b_m.data[:] = (psi_conc_vl_init - min_gamma_conc_vl)/n_active_bump_fcns
-    psi_rate_f[0].b_m.data[:] = (psi_rate_vl_init - min_gamma_rate_vl)/n_active_bump_fcns
+    psi_rate_o = .5 * (min_gamma_rate_vl + max_gamma_rate_vl)
+    psi_rate_s = .5 * (max_gamma_rate_vl - min_gamma_rate_vl)
+    psi_rate_f = torch.nn.Sequential(SumOfTiledHyperCubeBasisFcns(**hc_params),
+                                     ElementWiseTanh(o=psi_rate_o, s=psi_rate_s))
+
+    psi_conc_f[0].b_m.data[:] = np.arctanh((psi_conc_vl_init - psi_conc_o)/psi_conc_s)/n_active_bump_fcns
+    psi_rate_f[0].b_m.data[:] = np.arctanh((psi_rate_vl_init - psi_rate_o)/psi_rate_s)/n_active_bump_fcns
 
     psi_prior = CondGammaDistribution(conc_f=psi_conc_f, rate_f=psi_rate_f)
 

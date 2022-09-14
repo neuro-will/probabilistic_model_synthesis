@@ -4,9 +4,10 @@ Note: The distribution objects defined here are *not* subclasses of the torch.di
 
 """
 
+import numpy as np
 import torch
 
-from janelia_core.ml.extra_torch_modules import IndSmpConstantBoundedFcn
+from janelia_core.ml.extra_torch_modules import ElementWiseTanh
 from janelia_core.ml.extra_torch_modules import IndSmpConstantRealFcn
 from janelia_core.ml.extra_torch_modules import FixedOffsetAbs
 from janelia_core.ml.torch_distributions import CondFoldedNormalDistribution
@@ -72,8 +73,8 @@ class GammaProductDistribution(CondGammaDistribution):
     this input will be ignored.
     """
 
-    def __init__(self, n_vars: int, alpha_lb: float = 1.0, alpha_iv: float = 5.0,
-                 beta_lb: float = .00001, beta_iv: float = 5.0):
+    def __init__(self, n_vars: int, alpha_lb: float = 1.0, alpha_ub: float = 1E3, alpha_iv: float = 5.0,
+                 beta_lb: float = 1E-3, beta_ub: float = 1E5, beta_iv: float = 5.0):
         """ Creates a new FoldedNormalProductDistribution object.
 
         Args:
@@ -82,10 +83,14 @@ class GammaProductDistribution(CondGammaDistribution):
 
             alpha_lb: The lower bound that alpha parameters can take on
 
+            alpha_ub: The upper bound that alpha parameters can take on
+
             alpha_iv: The initial value for alpha parameters.  All distributions will be initialized to have the
             same initial values.
 
             beta_lb: The lower bound that beta parameters can take on
+
+            beta_ub: The upper bound that beta parameters can take on
 
             beta_iv: The initial value for beta parameters.  All distributions will be initialized to have the
             same initial values.
@@ -93,13 +98,28 @@ class GammaProductDistribution(CondGammaDistribution):
 
         self.n_vars = n_vars
         self.alpha_lb = alpha_lb
+        self.alpha_ub = alpha_ub
         self.beta_lb = beta_lb
+        self.beta_ub = beta_ub
 
-        alpha_f = torch.nn.Sequential(IndSmpConstantRealFcn(n=n_vars), FixedOffsetAbs(o=alpha_lb))
-        beta_f = torch.nn.Sequential(IndSmpConstantRealFcn(n=n_vars), FixedOffsetAbs(o=beta_lb))
+        alpha_o = .5*(alpha_lb + alpha_ub)
+        alpha_s = .5*(alpha_ub - alpha_lb)
+        beta_o = .5*(beta_lb + beta_ub)
+        beta_s = .5*(beta_ub - beta_lb)
 
-        alpha_f[0].f.vl.data[:] = alpha_iv
-        beta_f[0].f.vl.data[:] = beta_iv
+        self.alpha_o = alpha_o
+        self.alpha_s = alpha_s
+        self.beta_o = beta_o
+        self.beta_s = beta_s
+
+        alpha_f = torch.nn.Sequential(IndSmpConstantRealFcn(n=n_vars), ElementWiseTanh(o=alpha_o, s=alpha_s))
+        beta_f = torch.nn.Sequential(IndSmpConstantRealFcn(n=n_vars), ElementWiseTanh(o=beta_o, s=beta_s))
+
+        alpha_iv_t = np.arctanh((alpha_iv - alpha_o) / alpha_s)
+        beta_iv_t = np.arctanh((beta_iv - beta_o) / beta_s)
+
+        alpha_f[0].f.vl.data[:] = alpha_iv_t
+        beta_f[0].f.vl.data[:] = beta_iv_t
 
         super().__init__(conc_f=alpha_f, rate_f=beta_f)
 
@@ -126,17 +146,20 @@ class GammaProductDistribution(CondGammaDistribution):
 
         cur_std = self.std(x=torch.ones(self.n_vars)).squeeze()
 
-        new_alpha = (mean**2)/(cur_std**2) - self.alpha_lb
-        new_beta = mean/(cur_std**2) - self.beta_lb
+        new_alpha = (mean**2)/(cur_std**2)
+        new_beta = mean/(cur_std**2)
 
-        if torch.any(new_alpha < self.alpha_lb):
+        if torch.any((new_alpha < self.alpha_lb)) or torch.any((new_alpha > self.alpha_ub)):
             raise(RuntimeError('Setting the specified mean requires one or more alpha values that are out of range.'))
 
-        if torch.any(new_beta < self.beta_lb):
-            raise(RuntimeError('Setting the specified mean requires one or more beta values that are out of range.'))
+        if torch.any((new_beta < self.beta_lb)) or torch.any((new_beta > self.beta_ub)):
+            raise (RuntimeError('Setting the specified mean requires one or more alpha values that are out of range.'))
 
-        self.conc_f[0].f.vl.data = new_alpha
-        self.rate_f[0].f.vl.data = new_beta
+        new_alpha_t = torch.arctanh((new_alpha - self.alpha_o)/self.alpha_s)
+        new_beta_t = torch.arctanh((new_beta - self.beta_o)/self.beta_s)
+
+        self.conc_f[0].f.vl.data = new_alpha_t
+        self.rate_f[0].f.vl.data = new_beta_t
 
     def set_std(self, std: torch.Tensor) -> torch.Tensor:
         """ Sets the standard deviations of the gamma distributions, while not adjusting means.
@@ -161,17 +184,20 @@ class GammaProductDistribution(CondGammaDistribution):
 
         cur_mn = self(x=torch.ones(self.n_vars)).squeeze()
 
-        new_alpha = (cur_mn**2)/(std**2) - self.alpha_lb
-        new_beta = cur_mn/(std**2) - self.beta_lb
+        new_alpha = (cur_mn**2)/(std**2)
+        new_beta = cur_mn/(std**2)
 
-        if torch.any(new_alpha < self.alpha_lb):
-            raise(RuntimeError('Setting the specified std requires one or more alpha values that are out of range.'))
+        if torch.any((new_alpha < self.alpha_lb)) or torch.any((new_alpha > self.alpha_ub)):
+            raise(RuntimeError('Setting the specified mean requires one or more alpha values that are out of range.'))
 
-        if torch.any(new_beta < self.beta_lb):
-            raise(RuntimeError('Setting the specified std requires one or more beta values that are out of range.'))
+        if torch.any((new_beta < self.beta_lb)) or torch.any((new_beta > self.beta_ub)):
+            raise (RuntimeError('Setting the specified mean requires one or more alpha values that are out of range.'))
 
-        self.conc_f[0].f.vl.data = new_alpha
-        self.rate_f[0].f.vl.data = new_beta
+        new_alpha_t = torch.arctanh((new_alpha - self.alpha_o)/self.alpha_s)
+        new_beta_t = torch.arctanh((new_beta - self.beta_o)/self.beta_s)
+
+        self.conc_f[0].f.vl.data = new_alpha_t
+        self.rate_f[0].f.vl.data = new_beta_t
 
 
 class SampleLatentsGaussianVariationalPosterior(torch.nn.Module):
