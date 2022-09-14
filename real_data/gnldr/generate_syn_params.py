@@ -85,7 +85,7 @@ ps['mdl_opts'] = dict()
 ps['mdl_opts']['n_latent_vars'] = 10
 
 # Options for for generating the prior on the weights
-hc_params = {'n_divisions_per_dim': [70, 25, 10],
+hc_params = {'n_divisions_per_dim': [140, 50, 20], # WEB: Switched from 70 25 10
              'dim_ranges': ps['roi_dim_ranges'],
              'n_div_per_hc_side_per_dim': [1, 1, 1]}
 
@@ -94,11 +94,11 @@ ps['mdl_opts']['prior_opts'] = {
                                 # Parameters of the spatial grid underlying the priors
                                 'hc_params': hc_params,
                                 # Floor on std for distributions on means and loading matrices
-                                'min_gaussian_std': 1E-5,  # Used to be .01,
+                                'min_gaussian_std': 1E-6,  # WEB, switched from 1E-5 to make consistent with other applications
                                 # Floor on concentration parameter for any gamma distribution
                                 'min_gamma_conc_vl': 1.0,
                                 # Floor on rate parameter for any gamma distribution
-                                'min_gamma_rate_vl': 1E-5,  # Used to be .01
+                                'min_gamma_rate_vl': 1E-5,
                                 # Mean of distribution used to initialize loading matrix
                                 'lm_mn_init': 0.0,
                                 # Std of distribution used to initialize loading matrix
@@ -120,13 +120,13 @@ ps['mdl_opts']['post_opts'] = {
                               # Options for posteriors on loading matrices
                               'lm_opts': {'mn_mn': 1.0,
                                           'mn_std': 1E-8,
-                                          'std_lb': 1E-5,
+                                          'std_lb': 1E-6,  # WEB: changed from 1E-5 for consistancy with other analyses
                                           'std_ub': 10.0,
                                           'std_iv': 1E-4},
                               # Options for posteriors on mean vectors
                               'mn_opts': {'mn_mn': 1.0,
                                           'mn_std': 1E-8,
-                                          'std_lb': 1E-5,
+                                          'std_lb': 1E-6,  # WEB: changed from 1E-5 for consistancy with other analyses
                                           'std_ub': 10.0,
                                           'std_iv': 1E-4},
                               'psi_opts': {'alpha_lb': 1.0,
