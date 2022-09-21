@@ -11,7 +11,7 @@ ps = dict()
 # ======================================================================================================================
 # Specify a note we want to save with the parameters (to summerize/remind a user what the particular settings are for)
 # ======================================================================================================================
-ps['note'] = 'Changed form of non-linearities enforcing positive values of alpha and beta for prior and posteriors over standard deviations.'
+ps['note'] = 'Lowered fixed standard deviation of CPD over mean and loading matrices during sp training.'
 
 # ======================================================================================================================
 #   Specify where these parameters are saved
@@ -21,7 +21,7 @@ ps['note'] = 'Changed form of non-linearities enforcing positive values of alpha
 ps['param_filename'] = 'transfer_params.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v3'
+ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v9'
 
 # ======================================================================================================================
 #   Specify where results will be saved
@@ -48,7 +48,6 @@ ps['data_dir'] = r'/groups/bishop/bishoplab/projects/ahrens_wbo/data'
 ps['segment_table_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data'
 
 # File with the segment table in it
-#ps['segment_table_file'] = r'phototaxis_ns_subjects_1_2_5_6_8_9_10_11.pkl'
 ps['segment_table_file'] = r'omr_l_r_f_ns_across_cond_segments_8_9_10_11.pkl'
 
 # Folder with the fold structure in it
@@ -85,7 +84,7 @@ ps['mdl_opts'] = dict()
 ps['mdl_opts']['n_latent_vars'] = 10
 
 # Options for for generating the prior on the weights
-hc_params = {'n_divisions_per_dim': [140, 50, 20], # WEB: Switched from 70 25 10
+hc_params = {'n_divisions_per_dim': [140, 50, 20],
              'dim_ranges': ps['roi_dim_ranges'],
              'n_div_per_hc_side_per_dim': [1, 1, 1]}
 
@@ -102,15 +101,19 @@ ps['mdl_opts']['prior_opts'] = {
                                 # Min value rate parameter can take on for any gamma distribution
                                 'min_gamma_rate_vl': .1,
                                 # Max value rate parameter can take on for any gamma distribution
-                                'max_gamma_rate_vl': 1E5,
-                                # Mean of distribution used to initialize loading matrix
+                                'max_gamma_rate_vl': 1E4,
+                                # Initial value for the mean of prior over loading matrix entries.  This will be
+                                # the initial value for all regions of property space
                                 'lm_mn_init': 0.0,
-                                # Std of distribution used to initialize loading matrix
-                                'lm_std_init': .1,
-                                # Mean of distribution used to initialize mean vectors
+                                # Initial value for the standard deviation of prior over loading matrix entries.  This
+                                #  will be the initial value for all regions of property space
+                                'lm_std_init': .01,
+                                # Initial value for the mean of prior over mean vector entries.  This
+                                #  will be the initial value for all regions of property space
                                 'mn_mn_init': 0.0,
-                                # Std of distribution used to initialize mean vectors
-                                'mn_std_init': .1,
+                                # Initial value for the standard deviation of prior over mean vector entries.  This
+                                #  will be the initial value for all regions of property space
+                                'mn_std_init': .01,
                                 # Initial value of concentration parameter for distributions over priavate variances
                                 'psi_conc_vl_init': 10.0,
                                 # Initial value of rate parameter for distsributions over private vairances
@@ -124,22 +127,25 @@ ps['mdl_opts']['post_opts'] = {
                               # Options for posteriors on loading matrices
                               'lm_opts': {'mn_mn': 1.0,
                                           'mn_std': 1E-8,
-                                          'std_lb': 1E-6,  # WEB: changed from 1E-5 for consistancy with other analyses
+                                          'std_lb': 1E-6,
                                           'std_ub': 10.0,
                                           'std_iv': 1E-4},
                               # Options for posteriors on mean vectors
                               'mn_opts': {'mn_mn': 1.0,
                                           'mn_std': 1E-8,
-                                          'std_lb': 1E-6,  # WEB: changed from 1E-5 for consistancy with other analyses
+                                          'std_lb': 1E-6,
                                           'std_ub': 10.0,
                                           'std_iv': 1E-4},
                               'psi_opts': {'alpha_lb': 1.0,
                                            'alpha_ub': 1E3,
                                            'alpha_iv': 10.0,
                                            'beta_lb': .1,
-                                           'beta_ub': 1E5,
+                                           'beta_ub': 1E4,
                                            'beta_iv': 10.0}
                              }
+
+# Specify if we used a fixed variance for prior over means and loading matrix during sp initialization
+ps['mdl_opts']['sp_fixed_var'] = True
 
 # Options for fitting shared posterior models
 ps['mdl_opts']['sp_fit_opts'] = [{'n_epochs': 1000, 'milestones': None, 'update_int': 100, 'init_lr': .01,

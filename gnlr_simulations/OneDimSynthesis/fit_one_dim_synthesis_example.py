@@ -97,7 +97,7 @@ ps['d_pred'] = 1
 ps['true_w_prior_opts'] = {'n_bump_fcns': 50, 'd_in': 2, 'p': 1, 'mn_m_std': 1.0, 'std_m_std': .1, 'bump_w': .2}
 
 # Options for the prior on noise standard deviations
-ps['true_psi_prior_opts'] = {'conc_iv': 10.0, 'rate_iv': 1000.0, 'rate_ub': 100000.0}
+ps['true_psi_prior_opts'] = {'conc_iv': 10.0, 'rate_iv': 1000.0, 'rate_lb': .1, 'rate_ub': 10000.0}
 
 # ===============================================================================================
 # Options for fixed scales and offsets (we don't learn these)
@@ -115,16 +115,16 @@ ps['b_out'] = torch.tensor([0.0] * ps['d_pred'], dtype=torch.float)
 
 if ps['sim_type'] == 'props':
     #The full options for setting up the prior on weights for limited data example
-    fit_hc_params = {'n_divisions_per_dim': [101, 101],
-                     'dim_ranges': np.asarray([[0, 1],  # Changed from -.1 to 1.1
-                                               [0, 1]]),
+    fit_hc_params = {'n_divisions_per_dim': [100, 100],
+                     'dim_ranges': np.asarray([[-.0001, 1.0001],
+                                               [-.0001, 1.0001]]),
                      'n_div_per_hc_side_per_dim': [2, 2]}
 elif ps['sim_type'] == 'no_props':
     # The full options for setupping up the prior on weights for the props vs no props example 
     # Essentially, we treat all properties the same with these settings 
     fit_hc_params = {'n_divisions_per_dim': [1, 1],
-                     'dim_ranges': np.asarray([[0, 1],
-                                               [0, 1]]),
+                     'dim_ranges': np.asarray([[-.0001, 1.0001],
+                                               [-.0001, 1.0001]]),
                      'n_div_per_hc_side_per_dim': [1, 1]}
 
 if ps['sim_type'] == 'props':
@@ -140,7 +140,7 @@ elif ps['sim_type'] == 'no_props':
 ps['fit_psi_prior_opts'] = ps['true_psi_prior_opts']
 
 # Options for posterior distribtions
-ps['psi_post_opts'] = {'conc_iv': 10.0, 'rate_iv': 1.0, 'rate_ub': 100000.0}
+ps['psi_post_opts'] = {'conc_iv': 10.0, 'rate_iv': 1.0, 'rate_lb': .1, 'rate_ub': 10000.0}
 
 # Options for the densenet which makes up the shared-m module
 ps['dense_net_opts'] = {'n_layers': 2, 'growth_rate': 10, 'bias': True}
@@ -180,7 +180,7 @@ ps['random_seed'] = 1  # Set to None, to not set random seeds
 
 # ======================================================================================================
 # Location we should save results
-ps['save_folder'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/simulation/gnlr/with_props'
+ps['save_folder'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/simulation/gnlr/prototype_publication_results'
 ps['save_file'] = 'with_props.pt'
 
 # ======================================================================================================================

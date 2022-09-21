@@ -14,7 +14,7 @@ ps = dict()
 # ======================================================================================================================
 ps['note'] = ('Standardizing parameters across applications. ' +
               'Using same densenet as in synthetic example and fixed sp prior variances.' +
-              'Using fixed scales and offsets.')
+              'Using fixed scales and offsets.  Updated min rate values.')
 
 # ======================================================================================================================
 #   Specify where these parameters are saved
@@ -24,7 +24,7 @@ ps['note'] = ('Standardizing parameters across applications. ' +
 ps['param_filename'] = 'transfer_params.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v23'
+ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/same_cond_transfer_analysis/v25'
 
 # ======================================================================================================================
 #   Specify where results will be saved
@@ -126,7 +126,7 @@ ps['mdl_opts']['b_out_prior_opts'] = {'mn_mn': 0.0, 'mn_std': 1E-8, 'std_lb': 1E
 
 # Options for prior on noise variances
 ps['mdl_opts']['psi_prior_opts'] = {'conc_lb': 1.0, 'conc_ub': 1000.0, 'conc_iv': 10.0,
-                                    'rate_lb': .001, 'rate_ub': 100000.0, 'rate_iv': 10.0}  # WEB: rate_ub increased
+                                    'rate_lb': .1, 'rate_ub': 10000.0, 'rate_iv': 10.0}  # WEB: rate_ub increased
 
 # Options for posterior on weights
 ps['mdl_opts']['w_post_opts'] = dict()

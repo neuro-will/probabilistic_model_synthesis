@@ -29,10 +29,10 @@ SAVE_FILE = 'fit_results.pt'
 TGT_SUBJECTS = [8, 9, 11]
 
 # Specify the full path to the parameter file
-PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v3/transfer_params.pkl'
+PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v9/transfer_params.pkl'
 
 # Specify the base folder into which results should be saved
-RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v3'
+RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v9'
 
 # String prepended to all files containing the fold structure we will be working with
 FOLD_STR_PRE_STR = 'ac_an'
@@ -99,7 +99,6 @@ for fold in FOLDS:
                 job_command += BASE_PP_COMMAND + ' ' + results_file_path
                 save_file_path = str(type_dir / ('pp_' + pathlib.Path(SAVE_FILE).stem + '.pt'))
                 job_command += ' ' + save_file_path
-                job_command += ' -early_stopping_subjects ' + str(tgt_subj)
                 job_command += ' -early_stopping True'
                 job_command += ' -test_periods ' + ','.join(TEST_PERIODS)
 

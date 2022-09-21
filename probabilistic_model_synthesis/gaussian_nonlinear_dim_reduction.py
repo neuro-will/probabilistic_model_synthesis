@@ -20,6 +20,7 @@ import torch.optim
 from janelia_core.math.basic_functions import list_grid_pts
 from janelia_core.ml.extra_torch_modules import ElementWiseTanh
 from janelia_core.ml.extra_torch_modules import FixedOffsetAbs
+from janelia_core.ml.extra_torch_modules import FixedOffsetExp
 from janelia_core.ml.extra_torch_modules import SumOfTiledHyperCubeBasisFcns
 from janelia_core.ml.torch_distributions import CondGaussianDistribution
 from janelia_core.ml.torch_distributions import CondMatrixHypercubePrior
@@ -1125,7 +1126,7 @@ class PriorCollection():
 
 def synthesize_fa_mdls(data: List[torch.Tensor], props: List[torch.Tensor], n_latent_vars: int,
                        prior_opts: dict, post_opts: dict, sp_fit_opts: Sequence[dict], ip_fit_opts: Sequence[dict],
-                       devices: Sequence[torch.device] = None) -> dict:
+                       sp_fixed_var: bool = False, devices: Sequence[torch.device] = None) -> dict:
     """ Synthesizes FA models.
 
     Args:
@@ -1151,6 +1152,9 @@ def synthesize_fa_mdls(data: List[torch.Tensor], props: List[torch.Tensor], n_la
         fitting.  See Fitter.fit() for more details.
 
         ip_fit_opts: ip_fit_opts[i] is a dictionary of options to provide to the fitter for the i^th round of fitting.
+
+        sp_fixed_var: True if the variance of the shared posteriors for the loading matrices and means in the sp
+        fitting stage should be fixed to their initial value.
 
         devices: If provided, devices to use for fitting.  If false, we will search for GPUs, and use all found GPUs
         for fitting.  If no GPUs are found, fitting will be performed on cpu.
@@ -1183,6 +1187,9 @@ def synthesize_fa_mdls(data: List[torch.Tensor], props: List[torch.Tensor], n_la
     # Setup everything for fitting the shared posterior (sp) models
     # ==================================================================================================================
 
+    if sp_fixed_var:
+        print('Fixing standard deviation of sp loading matrix and mean priors.')
+        prior_opts['learnable_stds'] = False
     sp_priors = generate_hypercube_prior_collection(n_intermediate_latent_vars=n_latent_vars, **prior_opts)
 
     # Note that even though we create posteriors for all parameters, we only use those for the private variances and
@@ -1213,6 +1220,15 @@ def synthesize_fa_mdls(data: List[torch.Tensor], props: List[torch.Tensor], n_la
 
     # We initialize the ip priors to be equal to the sp_priors
     ip_priors = copy.deepcopy(sp_priors)
+
+    # If we were using fixed standard deviations in sp fitting, we now allow them to be learned
+    if sp_fixed_var:
+        for d in ip_priors.lm_prior.dists:
+            for param in d.std_f.parameters():
+                param.requires_grad = True
+
+        for param in ip_priors.mn_prior.std_f:
+            param.requires_grad = True
 
     ip_posteriors = generate_basic_posteriors(n_obs_vars=ind_n_vars, n_smps=ind_n_smps, n_latent_vars=n_latent_vars,
                                               n_intermediate_latent_vars=n_latent_vars, **post_opts)
@@ -1792,7 +1808,7 @@ def generate_hypercube_prior_collection(n_intermediate_latent_vars: int, hc_para
     # Generate prior for the mean
     mn_mn_f = SumOfTiledHyperCubeBasisFcns(**hc_params)
     mn_std_f = torch.nn.Sequential(SumOfTiledHyperCubeBasisFcns(**hc_params),
-                                   FixedOffsetAbs(o=min_gaussian_std))
+                                   FixedOffsetExp(o=min_gaussian_std))
 
     n_active_bump_fcns = np.cumprod(hc_params['n_div_per_hc_side_per_dim'])[-1]
     mn_mn_f.b_m.data[:] = mn_mn_init/n_active_bump_fcns

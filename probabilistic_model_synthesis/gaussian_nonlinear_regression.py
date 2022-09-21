@@ -1441,6 +1441,7 @@ def fit_with_hypercube_priors(data: Sequence[Sequence[torch.Tensor]], props: Seq
             for param in d.std_f.parameters():
                 param.requires_grad = False
 
+
     # Setup the posteriors - we don't provide w_post opts here as individual posteriors are not used in sp fitting
     sp_posteriors = generate_basic_posteriors(n_input_vars=ind_n_vars, p=p, n_pred_vars=n_pred_vars,
                                               s_in_opts=s_in_post_opts, b_in_opts=b_in_post_opts,
