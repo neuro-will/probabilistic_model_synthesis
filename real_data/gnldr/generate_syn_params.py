@@ -11,7 +11,7 @@ ps = dict()
 # ======================================================================================================================
 # Specify a note we want to save with the parameters (to summerize/remind a user what the particular settings are for)
 # ======================================================================================================================
-ps['note'] = 'Lowered fixed standard deviation of CPD over mean and loading matrices during sp training.'
+ps['note'] = 'Publication results.'
 
 # ======================================================================================================================
 #   Specify where these parameters are saved
@@ -93,7 +93,7 @@ ps['mdl_opts']['prior_opts'] = {
                                 # Parameters of the spatial grid underlying the priors
                                 'hc_params': hc_params,
                                 # Floor on std for distributions on means and loading matrices
-                                'min_gaussian_std': 1E-6,  # WEB, switched from 1E-5 to make consistent with other applications
+                                'min_gaussian_std': 1E-6,
                                 # Min value concentration parameter for any gamma distribution can take on
                                 'min_gamma_conc_vl': 1.0,
                                 # Max value concentration parameter for any gamma distribution can take on

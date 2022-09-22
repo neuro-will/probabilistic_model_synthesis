@@ -12,9 +12,7 @@ ps = dict()
 # ======================================================================================================================
 # Specify a note we want to save with the parameters (to summerize/remind a user what the particular settings are for)
 # ======================================================================================================================
-ps['note'] = ('Standardizing parameters across applications. ' +
-              'Using same densenet as in synthetic example and fixed sp prior variances.' +
-              'Using fixed scales and offsets.  Updated min rate values.')
+ps['note'] = ('Publication results.')
 
 # ======================================================================================================================
 #   Specify where these parameters are saved
@@ -100,8 +98,11 @@ hc_params = {'n_divisions_per_dim': [140, 50, 20],
              'n_div_per_hc_side_per_dim': [1, 1, 1]}
 
 
-ps['mdl_opts']['w_prior_opts'] = {'mn_hc_params': hc_params, 'std_hc_params': hc_params,
-                                  'min_std': .000001, 'mn_init': 0.0, 'std_init': .01}
+ps['mdl_opts']['w_prior_opts'] = {'mn_hc_params': hc_params,
+                                  'std_hc_params': hc_params,
+                                  'min_std': .000001,
+                                  'mn_init': 0.0,
+                                  'std_init': .01}
 
 # Options for priors on input and output scales and biases.
 #
@@ -125,11 +126,20 @@ ps['mdl_opts']['s_out_prior_opts'] = {'mn_mn': 1.0, 'mn_std': 1E-8, 'std_lb': 1E
 ps['mdl_opts']['b_out_prior_opts'] = {'mn_mn': 0.0, 'mn_std': 1E-8, 'std_lb': 1E-6, 'std_ub': 1E-0, 'std_iv': 1E-4}
 
 # Options for prior on noise variances
-ps['mdl_opts']['psi_prior_opts'] = {'conc_lb': 1.0, 'conc_ub': 1000.0, 'conc_iv': 10.0,
-                                    'rate_lb': .1, 'rate_ub': 10000.0, 'rate_iv': 10.0}  # WEB: rate_ub increased
+ps['mdl_opts']['psi_prior_opts'] = {'conc_iv': 10.0,
+                                    'rate_iv': 10.0,
+                                    'conc_lb': 1.0,
+                                    'conc_ub': 1000.0,
+                                    'rate_lb': .1,
+                                    'rate_ub': 10000.0,
+                                    }
 
 # Options for posterior on weights
-ps['mdl_opts']['w_post_opts'] = dict()
+ps['mdl_opts']['w_post_opts'] = {'std_lb': .000001,
+                                 'std_ub': 10.0,
+                                 'mn_mn': 0.0,
+                                 'mn_std': .01,
+                                 'std_iv': .01}
 
 # Options for posteriors on input and output scales and biases.  Note that these will not be used if
 # 'fixed_scales_and_offsets' above if false.

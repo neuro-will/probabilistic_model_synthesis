@@ -68,10 +68,6 @@ from probabilistic_model_synthesis.utilities import print_info
 # ======================================================================================================================
 ps = dict()
 
-# High-level switch determing what type of simulation we want to run - with or without props.  This only affects the way we
-# set the rest of the parameters below and nothing else. 
-ps['sim_type'] = 'props' #props or no_props
-
 # The number of example systems we generate data for, must be >= 4
 ps['n_ex_systems'] = 100  # Use >= 100 for publication
 
@@ -94,10 +90,19 @@ ps['d_pred'] = 1
 # Parameters for the true priors
 
 # Options for the prior distribution on weights
-ps['true_w_prior_opts'] = {'n_bump_fcns': 50, 'd_in': 2, 'p': 1, 'mn_m_std': 1.0, 'std_m_std': .1, 'bump_w': .2}
+ps['true_w_prior_opts'] = {'n_bump_fcns': 50,
+                           'd_in': 2, 'p': 1,
+                           'mn_m_std': 1.0,
+                           'std_m_std': .1,
+                           'bump_w': .2}
 
 # Options for the prior on noise standard deviations
-ps['true_psi_prior_opts'] = {'conc_iv': 10.0, 'rate_iv': 1000.0, 'rate_lb': .1, 'rate_ub': 10000.0}
+ps['true_psi_prior_opts'] = {'conc_iv': 10.0,
+                             'rate_iv': 1000.0,
+                             'conc_lb': 1.0,
+                             'conc_ub': 1000.0,
+                             'rate_lb': .1,
+                             'rate_ub': 10000.0}
 
 # ===============================================================================================
 # Options for fixed scales and offsets (we don't learn these)
@@ -113,34 +118,36 @@ ps['b_out'] = torch.tensor([0.0] * ps['d_pred'], dtype=torch.float)
 # ===============================================================================================
 # Parameters for setting up how we fit things with DPMS
 
-if ps['sim_type'] == 'props':
-    #The full options for setting up the prior on weights for limited data example
-    fit_hc_params = {'n_divisions_per_dim': [100, 100],
-                     'dim_ranges': np.asarray([[-.0001, 1.0001],
-                                               [-.0001, 1.0001]]),
-                     'n_div_per_hc_side_per_dim': [2, 2]}
-elif ps['sim_type'] == 'no_props':
-    # The full options for setupping up the prior on weights for the props vs no props example 
-    # Essentially, we treat all properties the same with these settings 
-    fit_hc_params = {'n_divisions_per_dim': [1, 1],
-                     'dim_ranges': np.asarray([[-.0001, 1.0001],
-                                               [-.0001, 1.0001]]),
-                     'n_div_per_hc_side_per_dim': [1, 1]}
+#The full options for setting up the prior on weights for limited data example
+fit_hc_params = {'n_divisions_per_dim': [100, 100],
+                 'dim_ranges': np.asarray([[-.0001, 1.0001], # Epsilon padding to endure all properties fall within a cube
+                                           [-.0001, 1.0001]]),
+                 'n_div_per_hc_side_per_dim': [2, 2]}
 
-if ps['sim_type'] == 'props':
-    # The full options for setting up the prior on weights when we have a CPD that can learn properties through space 
-    ps['fit_w_prior_opts'] = {'mn_hc_params': fit_hc_params, 'std_hc_params': fit_hc_params,
-                              'min_std': .000001, 'mn_init': 0.0, 'std_init': .01} #.3
-elif ps['sim_type'] == 'no_props':
-    # The full options for setting up the prior on weights when we have a CPD that ignore properties
-    ps['fit_w_prior_opts'] = {'mn_hc_params': fit_hc_params, 'std_hc_params': fit_hc_params,
-                              'min_std': .000001, 'mn_init': 0.0, 'std_init': .01}
+# The full options for setting up the prior on weights when we have a CPD that can learn properties through space
+ps['fit_w_prior_opts'] = {'mn_hc_params': fit_hc_params,
+                          'std_hc_params': fit_hc_params,
+                          'min_std': .000001,
+                          'mn_init': 0.0,
+                          'std_init': .01}
 
 # Options for prior on noise standard deviation
 ps['fit_psi_prior_opts'] = ps['true_psi_prior_opts']
 
 # Options for posterior distribtions
-ps['psi_post_opts'] = {'conc_iv': 10.0, 'rate_iv': 1.0, 'rate_lb': .1, 'rate_ub': 10000.0}
+
+ps['w_post_opts'] = {'std_lb': .000001,
+                     'std_ub': 10.0,
+                     'mn_mn': 0.0,
+                     'mn_std': .01,
+                     'std_iv': .01}
+
+ps['psi_post_opts'] = {'conc_iv': 10.0,
+                       'rate_iv': 1.0,
+                       'conc_lb': 1.0,
+                       'conc_ub': 1000.0,
+                       'rate_lb': .1,
+                       'rate_ub': 10000.0}
 
 # Options for the densenet which makes up the shared-m module
 ps['dense_net_opts'] = {'n_layers': 2, 'growth_rate': 10, 'bias': True}
@@ -152,20 +159,12 @@ ps['single_fit_inds'] = range(0, ps['n_ex_systems'])
 # ======================================================================================================
 # Parameters for fitting - should be entered as lists, each entry corresponding to one round of fitting
 
-if ps['sim_type'] == 'props':
-    # Setting for when we have a CPD that can learn properties through space 
-    ps['comb_sp_fit_opts'] = [{'n_epochs': 500, 'milestones': None, 'update_int': 100, 'init_lr': .01, 'n_batches': 2}]
+# Setting for when we have a CPD that can learn properties through space
+ps['comb_sp_fit_opts'] = [{'n_epochs': 500, 'milestones': None, 'update_int': 100, 'init_lr': .01, 'n_batches': 2}]
 
-    ps['comb_ip_fit_opts'] = [{'n_epochs': 1000, 'milestones': [1000], 'update_int': 100, 'init_lr': .1, 'n_batches': 2},
-                              {'n_epochs': 1000, 'milestones': [1000], 'update_int': 100, 'init_lr': .01, 'n_batches': 2},
-                              {'n_epochs': 1000, 'milestones': [1000], 'update_int': 100, 'init_lr': .001, 'n_batches': 2}]
-elif ps['sim_type'] == 'no_props': 
-    # Setting for when we have a CPD that ignore properties - in this case the shared prior initialiation won't help tie models together 
-    ps['comb_sp_fit_opts'] = [{'n_epochs': 1, 'milestones': None, 'update_int': 100, 'init_lr': .0, 'n_batches': 2}]
-
-    ps['comb_ip_fit_opts'] = [{'n_epochs': 1000, 'milestones': [1000], 'update_int': 100, 'init_lr': .001, 'n_batches': 2},
-                              {'n_epochs': 1000, 'milestones': [1000], 'update_int': 100, 'init_lr': .001, 'n_batches': 2},
-                              {'n_epochs': 1000, 'milestones': [1000], 'update_int': 100, 'init_lr': .001, 'n_batches': 2}]
+ps['comb_ip_fit_opts'] = [{'n_epochs': 1000, 'milestones': [1000], 'update_int': 100, 'init_lr': .1, 'n_batches': 2},
+                          {'n_epochs': 1000, 'milestones': [1000], 'update_int': 100, 'init_lr': .01, 'n_batches': 2},
+                          {'n_epochs': 1000, 'milestones': [1000], 'update_int': 100, 'init_lr': .001, 'n_batches': 2}]
 
 ps['single_sp_fit_opts'] = ps['comb_sp_fit_opts']
 ps['single_ip_fit_opts'] = ps['comb_ip_fit_opts']
@@ -308,6 +307,7 @@ comb_fit_rs = fit_with_hypercube_priors(data=ind_data, props=ind_props, p=ps['p'
                                         ip_fit_opts=ps['comb_ip_fit_opts'],
                                         w_prior_opts=ps['fit_w_prior_opts'],
                                         psi_prior_opts=ps['fit_psi_prior_opts'],
+                                        w_post_opts=ps['w_post_opts'],
                                         psi_post_opts=ps['psi_post_opts'],
                                         sp_fixed_var=True,
                                         fixed_s_in_vl=ps['s_in'],
