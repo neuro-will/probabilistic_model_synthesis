@@ -1,14 +1,16 @@
 import argparse
 import pathlib
 import pickle
-
+import random
 import os
+
+import numpy as np
+import torch
 
 from probabilistic_model_synthesis.gnlr_ahrens_tools import syn_ahrens_gnlr_mdls
 from probabilistic_model_synthesis.utilities import print_heading
 from probabilistic_model_synthesis.utilities import print_info
 
-import torch
 
 # ======================================================================================================================
 # Read in parameters
@@ -38,6 +40,9 @@ parser.add_argument('-sp_cp_dir', type=str, default=None, help='Directory to sav
 parser.add_argument('-ip_cp_dir', type=str, default=None, help='Directory to save individual posterior check points in.')
 
 parser.add_argument('-save_file', type=str, default=None, help='File results should be saved in.')
+
+parser.add_argument('-rand_seed', type=str, default=None, help='Random seed for reproducability.  If not used, seed ' +
+                                                                 'will not be set.')
 
 args = parser.parse_args()
 
@@ -82,6 +87,8 @@ if args.subject_filter is not None:
 else:
     ps['subject_filter'] = None
 
+if args.rand_seed is not None:
+    ps['random_seed'] = int(args.rand_seed)
 
 # ======================================================================================================================
 # Create check point directories
@@ -89,6 +96,16 @@ else:
 for cp_dir in [ps['sp_cp_dir'], ps['ip_cp_dir']]:
     if cp_dir is not None:
         os.mkdir(cp_dir)
+
+# ======================================================================================================================
+# Set random seed for reproducability
+# ======================================================================================================================
+if ps['random_seed'] is not None:
+    torch.manual_seed(ps['random_seed'])
+    random.seed(ps['random_seed'])
+    np.random.seed(ps['random_seed'])
+else:
+    ps['random_seed'] = None
 
 # ======================================================================================================================
 # Load and preprocess data and perform fitting

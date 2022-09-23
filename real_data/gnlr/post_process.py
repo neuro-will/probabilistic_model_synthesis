@@ -1,6 +1,10 @@
 import argparse
-
 import pickle
+import random
+
+import numpy as np
+import torch
+
 
 from probabilistic_model_synthesis.gnlr_ahrens_tools import post_process
 from probabilistic_model_synthesis.utilities import parse_bool_str
@@ -30,6 +34,9 @@ parser.add_argument('-sp', type=str, default='True', help='The string True if we
 parser.add_argument('-early_stopping', type=str, default='True', help=('The string True if we should use ' +
                                                                        'early stopping.'))
 
+parser.add_argument('-rand_seed', type=str, default=None, help='Random seed for reproducability.  If not used, seed ' +
+                                                                 'will not be set.')
+
 args = parser.parse_args()
 
 results_file = args.results_file
@@ -46,7 +53,20 @@ if parse_bool_str(args.sp):
 if parse_bool_str(args.ip):
     eval_types.append('ip')
 
+if args.rand_seed is not None:
+    random_seed = int(args.rand_seed)
+else:
+    random_seed = None
+
 early_stopping = parse_bool_str(args.early_stopping)
+
+# ======================================================================================================================
+# Set random seed if we are suppose to
+# ======================================================================================================================
+if random_seed is not None:
+    torch.manual_seed(random_seed)
+    random.seed(random_seed)
+    np.random.seed(random_seed)
 
 # ======================================================================================================================
 # Post process results
