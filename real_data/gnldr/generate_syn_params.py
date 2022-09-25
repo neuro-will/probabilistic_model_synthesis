@@ -18,10 +18,10 @@ ps['note'] = 'Publication results.'
 # ======================================================================================================================
 
 # Name of file parameters will be saved in
-ps['param_filename'] = 'transfer_params.pkl'
+ps['param_filename'] = 'fit_params.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v9'
+ps['param_save_dir'] = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnldr/quantification'
 
 # ======================================================================================================================
 #   Specify where results will be saved
@@ -42,16 +42,17 @@ ps['ip_cp_dir'] = None
 # ======================================================================================================================
 
 # Folder with the datasets in it
-ps['data_dir'] = r'/groups/bishop/bishoplab/projects/ahrens_wbo/data'
+ps['data_dir'] = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/data'
+
 
 # Folder with the segment table in it
-ps['segment_table_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data'
+ps['segment_table_dir'] = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/fold_structures'
 
 # File with the segment table in it
 ps['segment_table_file'] = r'omr_l_r_f_ns_across_cond_segments_8_9_10_11.pkl'
 
 # Folder with the fold structure in it
-ps['fold_str_dir'] = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data'
+ps['fold_str_dir'] = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/fold_structures'
 
 # Give the name of the file with the fold structure in it
 ps['fold_str_file'] = None

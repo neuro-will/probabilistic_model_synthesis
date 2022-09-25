@@ -29,10 +29,10 @@ SAVE_FILE = 'fit_results.pt'
 TGT_SUBJECTS = [8, 9, 11]
 
 # Specify the full path to the parameter file
-PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v9/transfer_params.pkl'
+PARAM_FILE = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnldr/quantification/fit_params.pkl'
 
 # Specify the base folder into which results should be saved
-RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnldr/across_cond_transfer_analysis/v9'
+RESULTS_DIR = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnldr/quantification'
 
 # String prepended to all files containing the fold structure we will be working with
 FOLD_STR_PRE_STR = 'ac_an'
@@ -64,11 +64,13 @@ ENV_SETUP = 'conda activate probabilistic_model_synthesis'
 BASE_FIT_COMMAND = 'python /groups/bishop/bishoplab/projects/probabilistic_model_synthesis/code/probabilistic_model_synthesis/real_data/gnldr/syn_ahrens_gnldr_mdls.py'
 BASE_PP_COMMAND = 'python /groups/bishop/bishoplab/projects/probabilistic_model_synthesis/code/probabilistic_model_synthesis/real_data/gnldr/post_process.py'
 
+rand_seed = 0
 for fold in FOLDS:
     fold_str_dir = pathlib.Path(RESULTS_DIR) / fold
     for tgt_subj in TGT_SUBJECTS:
         tgt_subj_dir = fold_str_dir / ('subj_' + str(tgt_subj))
         for fit_type in TYPES:
+            rand_seed += 1
             type_dir = tgt_subj_dir / fit_type
             fold_str_file = FOLD_STR_PRE_STR + '_tgt_' + str(tgt_subj) + '_' + fit_type + '_' + FOLD_STR_APP_STR
             if not os.path.isdir(type_dir):
@@ -89,6 +91,7 @@ for fold in FOLDS:
                 job_command += ' -sp_cp_dir ' + str(sp_cp_dir)
                 job_command += ' -ip_cp_dir ' + str(ip_cp_dir)
                 job_command += ' -save_file ' + SAVE_FILE
+                job_command += ' -rand_seed ' + str(rand_seed)
             else:
                 job_command = ''
 
@@ -101,6 +104,7 @@ for fold in FOLDS:
                 job_command += ' ' + save_file_path
                 job_command += ' -early_stopping True'
                 job_command += ' -test_periods ' + ','.join(TEST_PERIODS)
+                job_command += ' -rand_seed ' + str(rand_seed)
 
             call = BASE_CALL
             call += ' -o ' + str(type_dir / 'log.txt')

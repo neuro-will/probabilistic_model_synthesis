@@ -2,7 +2,9 @@ import argparse
 import os
 import pathlib
 import pickle
+import random
 
+import numpy as np
 import torch
 
 from probabilistic_model_synthesis.gnldr_ahrens_tools import syn_ahrens_fa_mdls
@@ -37,6 +39,9 @@ parser.add_argument('-sp_cp_dir', type=str, default=None, help='Directory to sav
 parser.add_argument('-ip_cp_dir', type=str, default=None, help='Directory to save individual posterior check points in.')
 
 parser.add_argument('-save_file', type=str, default=None, help='File results should be saved in.')
+
+parser.add_argument('-rand_seed', type=str, default=None, help='Random seed for reproducability.  If not used, seed ' +
+                                                                 'will not be set.')
 
 args = parser.parse_args()
 
@@ -81,6 +86,20 @@ if args.subject_filter is not None:
     ps['subject_filter'] = keep_subjects
 else:
     ps['subject_filter'] = None
+
+if args.rand_seed is not None:
+    ps['random_seed'] = int(args.rand_seed)
+else:
+    ps['random_seed'] == None
+
+
+# ======================================================================================================================
+# Set random seed for reproducability
+# ======================================================================================================================
+if ps['random_seed'] is not None:
+    torch.manual_seed(ps['random_seed'])
+    random.seed(ps['random_seed'])
+    np.random.seed(ps['random_seed'])
 
 # ======================================================================================================================
 # Create check point directories

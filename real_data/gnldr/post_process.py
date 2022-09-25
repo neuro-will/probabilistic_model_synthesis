@@ -1,7 +1,8 @@
 import argparse
-import os
+import random
 
 import torch
+import numpy as np
 
 from janelia_core.ml.utils import list_torch_devices
 from probabilistic_model_synthesis.gnldr_ahrens_tools import post_process
@@ -35,6 +36,9 @@ parser.add_argument('-sp', type=str, default='True', help='The string True if we
 parser.add_argument('-early_stopping', type=str, default='True', help=('The string True if we should use ' +
                                                                        'early stopping.'))
 
+parser.add_argument('-rand_seed', type=str, default=None, help='Random seed for reproducability.  If not used, seed ' +
+                                                                 'will not be set.')
+
 args = parser.parse_args()
 
 args = parser.parse_args()
@@ -58,14 +62,26 @@ if parse_bool_str(args.ip):
 if parse_bool_str(args.sp):
     eval_types.append('sp')
 
+if args.rand_seed is not None:
+    random_seed = int(args.rand_seed)
+else:
+    random_seed = None
+
+# ======================================================================================================================
+# Set random seed for reproducability
+# ======================================================================================================================
+if random_seed is not None:
+    torch.manual_seed(random_seed)
+    random.seed(random_seed)
+    np.random.seed(random_seed)
+
 early_stopping = parse_bool_str(args.early_stopping)
 
-# Only post process results if we can't find any existing post processed results
-if True: #not os.path.exists(save_file):
+# ==================================================================================================================
+# Post process results
+# ==================================================================================================================
 
-    # ==================================================================================================================
-    # Post process results
-    # ==================================================================================================================
+if True: #not os.path.exists(save_file):
 
     print_heading('Post processing results.')
 

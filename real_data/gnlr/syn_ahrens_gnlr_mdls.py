@@ -89,6 +89,8 @@ else:
 
 if args.rand_seed is not None:
     ps['random_seed'] = int(args.rand_seed)
+else:
+    ps['random_seed'] = None
 
 # ======================================================================================================================
 # Create check point directories
@@ -104,8 +106,6 @@ if ps['random_seed'] is not None:
     torch.manual_seed(ps['random_seed'])
     random.seed(ps['random_seed'])
     np.random.seed(ps['random_seed'])
-else:
-    ps['random_seed'] = None
 
 # ======================================================================================================================
 # Load and preprocess data and perform fitting
