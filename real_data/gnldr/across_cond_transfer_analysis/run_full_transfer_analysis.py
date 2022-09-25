@@ -59,10 +59,10 @@ TYPES = ['multi_cond', 'single_cond']
 BASE_CALL = 'bsub -n ' + str(N_SLOTS) + ' -gpu "num=' + str(N_GPU) + '"' + ' -q ' + QUEUE
 
 ANACONDA_SETUP = '. /groups/bishop/home/bishopw/anaconda3/etc/profile.d/conda.sh'
-ENV_SETUP = 'conda activate probabilistic_model_synthesis'
+ENV_SETUP = 'conda activate unified_env'
 
-BASE_FIT_COMMAND = 'python /groups/bishop/bishoplab/projects/probabilistic_model_synthesis/code/probabilistic_model_synthesis/real_data/gnldr/syn_ahrens_gnldr_mdls.py'
-BASE_PP_COMMAND = 'python /groups/bishop/bishoplab/projects/probabilistic_model_synthesis/code/probabilistic_model_synthesis/real_data/gnldr/post_process.py'
+BASE_FIT_COMMAND = 'python /groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/code/probabilistic_model_synthesis/real_data/gnldr/syn_ahrens_gnldr_mdls.py'
+BASE_PP_COMMAND = 'python /groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/code/probabilistic_model_synthesis/real_data/gnldr/post_process.py'
 
 rand_seed = 0
 for fold in FOLDS:
