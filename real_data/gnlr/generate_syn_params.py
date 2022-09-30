@@ -22,7 +22,7 @@ ps['note'] = ('Publication results.')
 ps['param_filename'] = 'fit_params.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnlr/real_data_delete_me'
+ps['param_save_dir'] = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnlr/real_data'
 
 # ======================================================================================================================
 #   Specify where results will be saved

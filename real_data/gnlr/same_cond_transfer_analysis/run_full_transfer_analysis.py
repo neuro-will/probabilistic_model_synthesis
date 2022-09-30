@@ -35,10 +35,10 @@ BASE_SUBJECTS = [1, 2, 5, 6]
 TGT_SUBJECTS = [8, 10, 11]
 
 # Specify the full path to the parameter file
-PARAM_FILE = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnlr/real_data_delete_me/fit_params.pkl'
+PARAM_FILE = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnlr/real_data/fit_params.pkl'
 
 # Specify the base folder into which results should be saved
-RESULTS_DIR = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnlr/real_data_delete_me'
+RESULTS_DIR = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnlr/real_data'
 
 # Specify the fold structure files we should fit to
 FOLD_STR_FILES = ['fold_str_base_14_tgt_1.pkl',
