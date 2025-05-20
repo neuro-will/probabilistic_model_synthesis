@@ -226,6 +226,13 @@ m_true = IncreasingSinFcn()
 # ======================================================================================================================
 print_heading('Generating synthetic systems and data.')
 
+# Set used device to gpu if cuda-ready gpu is available, otherwise use cpu
+if torch.cuda.is_available():
+    device = torch.device('cuda')
+else:
+    device = torch.device('cpu')
+print(f'Using device: {device}')
+
 # Generate properties
 ind_n_vars = np.random.randint(ps['n_input_var_range'][0], ps['n_input_var_range'][1]+1, ps['n_ex_systems'])
 ind_props = [torch.rand(size=[n_vars,2]) for n_vars in ind_n_vars]
@@ -284,7 +291,7 @@ for i in range(ps['n_ex_systems']):
                                                            interval=cur_interval,
                                                            big_std=1.0,
                                                            small_std=0,
-                                                           device=torch.device('cuda'))
+                                                           device=device)
     x_i_new = x_i_new.cpu()
 
     with torch.no_grad():
