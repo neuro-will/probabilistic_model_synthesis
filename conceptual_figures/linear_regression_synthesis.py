@@ -240,7 +240,6 @@ if __name__ == '__main__':
         for e_i, n_ex_systems in enumerate(ps['n_ex_systems']):
             rs_inds = np.argwhere([True if params['n_ex_systems'] == n_ex_systems else False
                                    for params in par_params]).squeeze()
-            print(rs_inds)
             for r_i, ind in enumerate(rs_inds):
                 mn_rmse[r_i, e_i] = sim_rs[ind][1]['mn_rmse']
                 std_rmse[r_i, e_i] = sim_rs[ind][1]['std_rmse']
@@ -248,7 +247,7 @@ if __name__ == '__main__':
                 geomean_std[r_i, e_i] = sim_rs[ind][1]['geomean_cpd_std']
 
         # Save results
-        with open(SAVE_FILE, 'wb') as f:
+        with open(SAVE_PATH, 'wb') as f:
             full_rs = dict()
             full_rs['ps'] = ps
             full_rs['sim_rs'] = sim_rs
@@ -258,8 +257,8 @@ if __name__ == '__main__':
             full_rs['geomean_std'] = geomean_std
             pickle.dump(full_rs, f)
     else:
-        print('Loading previous simulation results from ' + SAVE_FILE)
-        with open(SAVE_FILE, 'rb') as f:
+        print('Loading previous simulation results from ' + SAVE_PATH)
+        with open(SAVE_PATH, 'rb') as f:
             saved_rs = pickle.load(f)
             sim_rs = saved_rs['sim_rs']
             mn_rmse = saved_rs['mn_rmse']
@@ -304,7 +303,7 @@ if __name__ == '__main__':
     plt.legend(['RMSE', 'geometric mean'])
     plt.show()
 
-    fig.savefig(FIG_SAVE_FILE, format='eps')
+    fig.savefig(FIG_SAVE_PATH, format='eps')
 
 
 
