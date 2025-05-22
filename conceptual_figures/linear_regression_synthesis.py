@@ -26,6 +26,8 @@ import itertools
 import multiprocessing
 from multiprocessing import Pool
 import pickle
+import os
+import pathlib
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,10 +43,16 @@ from probabilistic_model_synthesis.distributions import SampleLatentsGaussianVar
 # High level parameters here (see where the main script starts below for all other parameters)
 # ==================================================================================================================
 
-LOAD_PREV_RESULTS = True
-SAVE_FILE = r'/Volumes/bishoplab/projects/probabilistic_model_synthesis/results/simulation/reg_with_varying_no_of_example_systems/reg_synthesis_with_varying_n_ex_systems.pkl'
-FIG_SAVE_FILE = r'/Users/bishopw/Desktop/reg_synthesis_with_varying_n_ex_systems.eps'
+LOAD_PREV_RESULTS = False
+SAVE_DIR = r'/groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/results/simulation/reg_with_varying_no_of_example_systems/'
+SAVE_FILE = r'reg_synthesis_with_varying_n_ex_systems.pkl'
+FIG_SAVE_FILE = r'reg_synthesis_with_varying_n_ex_systems.eps'
 
+SAVE_PATH = pathlib.Path(SAVE_DIR) / SAVE_FILE
+FIG_SAVE_PATH = pathlib.Path(SAVE_DIR) / FIG_SAVE_FILE
+
+if not os.path.exists(SAVE_DIR):
+    os.makedirs(SAVE_DIR)
 
 # ==================================================================================================================
 # Helper functions
