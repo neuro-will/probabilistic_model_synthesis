@@ -1,6 +1,7 @@
 """ For generating and saving parameters for the script syn_ahrens_gnlr_mdls.py. """
 
 import copy
+import os.path
 import pathlib
 import pickle
 import torch
@@ -170,6 +171,8 @@ ps['mdl_opts']['ip_fit_opts'] = [{'n_epochs': 20000, 'n_batches': 2, 'init_lr': 
 # ======================================================================================================================
 
 save_path = pathlib.Path(ps['param_save_dir']) / ps['param_filename']
+if not os.path.exists(pathlib.Path(ps['param_save_dir'])):
+    os.makedirs(pathlib.Path(ps['param_save_dir']))
 with open(save_path, 'wb') as f:
     pickle.dump(ps, f)
 

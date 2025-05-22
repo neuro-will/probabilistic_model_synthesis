@@ -3,6 +3,7 @@
 import copy
 import pathlib
 import pickle
+import os
 
 import numpy as np
 
@@ -161,6 +162,8 @@ ps['mdl_opts']['ip_fit_opts'] = [{'n_epochs': 2000, 'milestones': [500], 'update
 # ======================================================================================================================
 
 save_path = pathlib.Path(ps['param_save_dir']) / ps['param_filename']
+if not os.path.exists(pathlib.Path(ps['param_save_dir'])):
+    os.makedirs(pathlib.Path(ps['param_save_dir']))
 with open(save_path, 'wb') as f:
     pickle.dump(ps, f)
 
