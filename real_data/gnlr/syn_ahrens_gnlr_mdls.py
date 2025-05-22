@@ -96,7 +96,7 @@ else:
 # Create check point directories
 # ======================================================================================================================
 for cp_dir in [ps['sp_cp_dir'], ps['ip_cp_dir']]:
-    if cp_dir is not None:
+    if cp_dir is not None and not os.path.exists(cp_dir):
         os.mkdir(cp_dir)
 
 # ======================================================================================================================
