@@ -179,7 +179,7 @@ ps['random_seed'] = 1  # Set to None, to not set random seeds
 
 # ======================================================================================================
 # Location we should save results
-ps['save_folder'] = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnlr/simulation'
+ps['save_folder'] = r'/groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/results/publication_results/gnlr/simulation'
 ps['save_file'] = 'full_simulations.pt'
 
 # ======================================================================================================================

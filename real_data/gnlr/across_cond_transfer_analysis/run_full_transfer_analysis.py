@@ -29,7 +29,7 @@ SAVE_FILE = 'test_results.pt'
 TGT_SUBJECTS = [8, 9, 11]
 
 # Specify the full path to the parameter file
-PARAM_FILE = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/across_cond_transfer_analysis/v6/transfer_params.pkl'
+PARAM_FILE = r'/groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/real_data/gnlr/across_cond_transfer_analysis/v6/transfer_params.pkl'
 
 # Specify the base folder into which results should be saved
 RESULTS_DIR = r'/groups/bishop/bishoplab/projects/probabilistic_model_synthesis/results/real_data/gnlr/across_cond_transfer_analysis/v6'
@@ -44,8 +44,8 @@ FOLD_STR_APP_STR = 'folds.pkl'
 FOLDS = ['omr_l_ns', 'omr_r_ns', 'omr_f_ns']
 
 # Specify job resources for fitting models
-N_SLOTS = 3
-QUEUE = 'gpu_rtx'
+N_SLOTS = 1
+QUEUE = 'gpu_a100'
 N_GPU = 1
 
 # ======================================================================================================================
@@ -55,8 +55,8 @@ TYPES = ['multi_cond', 'single_cond']
 
 BASE_CALL = 'bsub -n ' + str(N_SLOTS) + ' -gpu "num=' + str(N_GPU) + '"' + ' -q ' + QUEUE
 
-ANACONDA_SETUP = '. /groups/bishop/home/bishopw/anaconda3/etc/profile.d/conda.sh'
-ENV_SETUP = 'conda activate probabilistic_model_synthesis'
+ANACONDA_SETUP = '. /groups/ahrens/home/hesselinkl/anaconda3/etc/profile.d/conda.sh'
+ENV_SETUP = 'conda activate dpms'
 
 BASE_FIT_COMMAND = 'python /groups/bishop/bishoplab/projects/probabilistic_model_synthesis/code/probabilistic_model_synthesis/real_data/gnlr/syn_ahrens_gnlr_mdls.py'
 BASE_PP_COMMAND = 'python /groups/bishop/bishoplab/projects/probabilistic_model_synthesis/code/probabilistic_model_synthesis/real_data/gnlr/post_process.py'

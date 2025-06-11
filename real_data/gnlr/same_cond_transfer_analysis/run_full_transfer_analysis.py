@@ -35,10 +35,10 @@ BASE_SUBJECTS = [1, 2, 5, 6]
 TGT_SUBJECTS = [8, 10, 11]
 
 # Specify the full path to the parameter file
-PARAM_FILE = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnlr/real_data/fit_params.pkl'
+PARAM_FILE = r'/groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/results/publication_results/gnlr/real_data/fit_params.pkl'
 
 # Specify the base folder into which results should be saved
-RESULTS_DIR = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnlr/real_data'
+RESULTS_DIR = r'/groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/results/publication_results/gnlr/real_data'
 
 # Specify the fold structure files we should fit to
 FOLD_STR_FILES = ['fold_str_base_14_tgt_1.pkl',
@@ -51,23 +51,23 @@ FOLD_STR_FILES = ['fold_str_base_14_tgt_1.pkl',
 N_FOLDS = 3
 
 # Specify number of slots for each analysis type
-COMB_N_SLOTS = 3
-IND_N_SLOTS = 3
+COMB_N_SLOTS = 1
+IND_N_SLOTS = 1
 
 # ======================================================================================================================
 # Code to submit the jobs goes here
 # ======================================================================================================================
 TYPES = ['comb', 'ind']
-GPU_QUEUE = 'gpu_rtx'
+GPU_QUEUE = 'gpu_a100'
 
 BASE_COMB_CALL = 'bsub -n ' + str(COMB_N_SLOTS) + ' -gpu "num=1"' + ' -q ' + GPU_QUEUE
 BASE_IND_CALL = 'bsub -n ' + str(IND_N_SLOTS) + ' -gpu "num=1"' + ' -q ' + GPU_QUEUE
-print(BASE_COMB_CALL)
-ANACONDA_SETUP = '. /groups/bishop/home/bishopw/anaconda3/etc/profile.d/conda.sh'
-ENV_SETUP = 'conda activate unified_env'
 
-BASE_FIT_COMMAND = 'python /groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/code/probabilistic_model_synthesis/real_data/gnlr/syn_ahrens_gnlr_mdls.py'
-BASE_PP_COMMAND = 'python /groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/code/probabilistic_model_synthesis/real_data/gnlr/post_process.py'
+ANACONDA_SETUP = '. /groups/ahrens/home/hesselinkl/anaconda3/etc/profile.d/conda.sh'
+ENV_SETUP = 'conda activate dpms'
+
+BASE_FIT_COMMAND = 'python /groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/real_data/gnlr/syn_ahrens_gnlr_mdls.py'
+BASE_PP_COMMAND = 'python /groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/real_data/gnlr/post_process.py'
 
 rand_seed = 0
 for fold_str_file in FOLD_STR_FILES:

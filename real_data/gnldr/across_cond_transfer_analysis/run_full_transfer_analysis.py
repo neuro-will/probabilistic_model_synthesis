@@ -29,10 +29,10 @@ SAVE_FILE = 'fit_results.pt'
 TGT_SUBJECTS = [8, 9, 11]
 
 # Specify the full path to the parameter file
-PARAM_FILE = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnldr/quantification/fit_params.pkl'
+PARAM_FILE = r'/groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/results/publication_results/gnldr/quantification/fit_params.pkl'
 
 # Specify the base folder into which results should be saved
-RESULTS_DIR = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnldr/quantification'
+RESULTS_DIR = r'/groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/results/publication_results/gnldr/quantification'
 
 # String prepended to all files containing the fold structure we will be working with
 FOLD_STR_PRE_STR = 'ac_an'
@@ -47,8 +47,8 @@ FOLDS = ['omr_l_ns', 'omr_r_ns', 'omr_f_ns']
 TEST_PERIODS = ['omr_forward', 'omr_left', 'omr_right']
 
 # Specify job resources for fitting models
-N_SLOTS = 3
-QUEUE = 'gpu_rtx'
+N_SLOTS = 1
+QUEUE = 'gpu_a100'
 N_GPU = 1
 
 # ======================================================================================================================
@@ -58,11 +58,11 @@ TYPES = ['multi_cond', 'single_cond']
 
 BASE_CALL = 'bsub -n ' + str(N_SLOTS) + ' -gpu "num=' + str(N_GPU) + '"' + ' -q ' + QUEUE
 
-ANACONDA_SETUP = '. /groups/bishop/home/bishopw/anaconda3/etc/profile.d/conda.sh'
-ENV_SETUP = 'conda activate unified_env'
+ANACONDA_SETUP = '. /groups/ahrens/home/hesselinkl/anaconda3/etc/profile.d/conda.sh'
+ENV_SETUP = 'conda activate dpms'
 
-BASE_FIT_COMMAND = 'python /groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/code/probabilistic_model_synthesis/real_data/gnldr/syn_ahrens_gnldr_mdls.py'
-BASE_PP_COMMAND = 'python /groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/code/probabilistic_model_synthesis/real_data/gnldr/post_process.py'
+BASE_FIT_COMMAND = 'python /groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/real_data/gnldr/syn_ahrens_gnldr_mdls.py'
+BASE_PP_COMMAND = 'python /groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/real_data/gnldr/post_process.py'
 
 rand_seed = 0
 for fold in FOLDS:
