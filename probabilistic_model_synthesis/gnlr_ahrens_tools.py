@@ -11,9 +11,9 @@ import pickle
 import numpy as np
 import torch
 
-from ahrens_wbo.data_processing import generate_torch_dataset
-from ahrens_wbo.data_processing import load_and_preprocess_data
-from ahrens_wbo.data_processing import SegmentTable
+from probabilistic_model_synthesis.data_utils import generate_torch_dataset
+from probabilistic_model_synthesis.data_utils import load_and_preprocess_data
+from probabilistic_model_synthesis.data_utils import SegmentTable
 
 from janelia_core.stats.regression import r_squared
 

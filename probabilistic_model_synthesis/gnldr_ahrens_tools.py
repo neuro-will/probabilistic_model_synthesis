@@ -12,10 +12,10 @@ import pickle
 import numpy as np
 import torch
 
-from ahrens_wbo.annotations import label_subperiods
-from ahrens_wbo.data_processing import generate_torch_dataset
-from ahrens_wbo.data_processing import load_and_preprocess_data
-from ahrens_wbo.data_processing import SegmentTable
+from probabilistic_model_synthesis.annotations import label_subperiods
+from probabilistic_model_synthesis.data_utils import generate_torch_dataset
+from probabilistic_model_synthesis.data_utils import load_and_preprocess_data
+from probabilistic_model_synthesis.data_utils import SegmentTable
 
 from probabilistic_model_synthesis.fa import orthonormalize
 from probabilistic_model_synthesis.gaussian_nonlinear_dim_reduction import approximate_elbo

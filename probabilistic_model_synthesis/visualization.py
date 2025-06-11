@@ -9,6 +9,7 @@ import torch
 
 from janelia_core.math.basic_functions import bound
 from janelia_core.visualization.image_generation import generate_2d_fcn_image
+from janelia_core.math.basic_functions import find_binary_runs
 from janelia_core.math.basic_functions import list_grid_pts
 from janelia_core.ml.torch_distributions import CondVAEDistribution
 from janelia_core.ml.utils import torch_mod_to_fcn
@@ -127,4 +128,49 @@ def plot_torch_dist(mn_f, std_f, extra_title_str: str = None, axes: OptionalMult
     axes[1].set_title('Std' + extra_title_str)
 
 
+def plot_segmented_signal(tm_pts: np.ndarray, sig: np.ndarray, ax: plt.Axes = None, delta: float = .6,
+                          remove_tm_btw_chunks: bool = True, tm_padding: float = 1.0, color='k',
+                          linewidth=1.0):
+    """ Plots a signal that exists at different chunks in time.
+
+    Each chunk will be plotted as a seperate trace, and the user can chose to remove time between chunks.
+
+    Args:
+        tm_pts: The array of time points the signal is sampled at
+
+        sig: The array of signal values
+
+        ax: Axes to plot into.  If None, a figure with axes will be crated.
+
+        delta: The threshold to use when determining if two sequential time points belong to the same chunk or not
+    """
+
+    if ax is None:
+        f = plt.figure()
+        ax = plt.subplot(1,1,1)
+
+    # Make sure everything is sorted
+    sort_order = np.argsort(tm_pts)
+    tm_pts = tm_pts[sort_order]
+    sig = sig[sort_order]
+
+    # Find the chunks
+    tm_diff = np.diff(tm_pts)
+    small_diffs = tm_diff < delta
+    runs = find_binary_runs(small_diffs)
+    for r_i, run in enumerate(runs):
+        runs[r_i] = slice(run.start, run.stop+1)
+
+    # Remove time between chunks if we are suppose to
+    if remove_tm_btw_chunks:
+        cur_adj = 0
+        for run in runs:
+            cur_tm_span = tm_pts[run][-1] - tm_pts[run][0]
+            tm_pts[run] = (tm_pts[run] - tm_pts[run][0]) + cur_adj
+            cur_adj += cur_tm_span + tm_padding
+
+    for run in runs:
+        ax.plot(tm_pts[run], sig[run], color=color, linewidth=linewidth)
+
+    return ax
 

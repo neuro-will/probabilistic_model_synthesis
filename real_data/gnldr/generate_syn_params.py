@@ -22,7 +22,7 @@ ps['note'] = 'Publication results.'
 ps['param_filename'] = 'fit_params.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/gnldr/quantification'
+ps['param_save_dir'] = r'/groups/ahrens/ahrenslab/Luuk/projects/dpms_manuscript/probabilistic_model_synthesis/results/publication_results/gnldr/quantification'
 
 # ======================================================================================================================
 #   Specify where results will be saved
@@ -44,7 +44,6 @@ ps['ip_cp_dir'] = None
 
 # Folder with the datasets in it
 ps['data_dir'] = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/data'
-
 
 # Folder with the segment table in it
 ps['segment_table_dir'] = r'/groups/fitzgerald/fitzgeraldlab/bishoplab/projects/probabilistic_model_synthsis/results/publication_results/fold_structures'
