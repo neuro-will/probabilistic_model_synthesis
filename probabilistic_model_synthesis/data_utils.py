@@ -15,6 +15,7 @@ import scipy.io
 
 from janelia_core.dataprocessing.dataset import PointDataset
 from janelia_core.dataprocessing.point import Point
+from janelia_core.dataprocessing.dataset import DataSet
 from janelia_core.fileio.data_handlers import NDArrayHandler
 from janelia_core.math.basic_functions import copy_and_delay
 from janelia_core.math.basic_functions import combine_slices
@@ -22,6 +23,7 @@ from janelia_core.math.basic_functions import find_binary_runs
 from janelia_core.math.basic_functions import nan_matrix
 from janelia_core.ml.datasets import cat_time_series_batches
 from janelia_core.ml.datasets import TimeSeriesDataset
+from janelia_core.ml.datasets import TimeSeriesBatch
 
 from probabilistic_model_synthesis.annotations import label_periods
 from probabilistic_model_synthesis.annotations import label_subperiods
@@ -208,7 +210,7 @@ def load_and_preprocess_data(data_folder: Path, subjects: Sequence[int], stim_va
     subject_data = dict()
     for s_i, s_n in enumerate(subjects):
         subject_str = 'subject_' + str(s_n)
-        subject_data[s_n] = load_processed_data(Path(data_folder) / subject_str, s_n)
+        subject_data[s_n] = load_processed_data(Path(data_folder) / subject_str)
         print('Done loading data for subject ' + subject_str + '.')
 
     # Down-select behavioral variables
@@ -357,6 +359,7 @@ def load_processed_data(main_folder: str) -> PointDataset:
     metadata['deconvolution_params']['lam'] = deconvRs['lam']
 
     return PointDataset(ts_data=ts_data, metadata=metadata, point_groups=point_groups, stats=stats)
+
 
 def read_in_ahrens_data_for_dim_reduction(data_dir: Path, fit_specs: dict, shock: bool, n_validation_slices: int,
                                           preprocess_opts: dict = None, ) -> dict:
