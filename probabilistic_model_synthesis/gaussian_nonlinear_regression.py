@@ -42,45 +42,45 @@ OptionalTensor = Optional[torch.Tensor]
 StrOrPath = Union[pathlib.Path, str]
 
 
-def align_low_d_spaces(w_0: np.ndarray, s_in_0: np.ndarray, b_in_0: np.ndarray,
-                              w_1: np.ndarray, s_in_1: np.ndarray, b_in_1: np.ndarray,
-                              z_0: Optional[np.ndarray] = None, z_1: Optional[np.ndarray] = None) -> Tuple[np.ndarray]:
-    """
-    Aligns the low-d spaces of two models.
-
-    Args:
-
-        w_0: The weights from model 0
-
-        w_1: The weights from model 1
-
-        s_in_0: The s_in parameter from model 0
-
-        s_in_1: The s_in parameter from model 1
-
-        b_in_0: The b_in parameter from model 0
-
-        b_in1: The b_in parameter from model 0
-
-        z_0: Low-d projections of data from model 0.  This should be after input scales and biases are applied.
-
-        z_1: Low-d projections of data from model 1.  This should be after input scales and biases are applied.
-
-    """
-
-    # Get aligned parameters for model 1
-    b1_aligned = b_in_0
-    s1_aligned = s_in_0
-    t = numpy.linalg.lstsq(w_1, w_0, rcond=None)
-    w1_aligned = np.matmul(w_0, t[0])
-
-    # Get latents for aligned model 1
-    if z_1 is not None:
-        z1_rev = (z_1 - b_in_1)/s_in_1  # Remove biases and scales from model 1 projections
-        z1_aligned = s1_aligned*np.matmul(z1_rev, t[0]) + b1_aligned
-        return b1_aligned, s1_aligned, w1_aligned, t[0], z1_aligned
-    else:
-        return b1_aligned, s1_aligned, w1_aligned, t[0]
+# def align_low_d_spaces(w_0: np.ndarray, s_in_0: np.ndarray, b_in_0: np.ndarray,
+#                               w_1: np.ndarray, s_in_1: np.ndarray, b_in_1: np.ndarray,
+#                               z_0: Optional[np.ndarray] = None, z_1: Optional[np.ndarray] = None) -> Tuple[np.ndarray]:
+#     """
+#     Aligns the low-d spaces of two models.
+#
+#     Args:
+#
+#         w_0: The weights from model 0
+#
+#         w_1: The weights from model 1
+#
+#         s_in_0: The s_in parameter from model 0
+#
+#         s_in_1: The s_in parameter from model 1
+#
+#         b_in_0: The b_in parameter from model 0
+#
+#         b_in1: The b_in parameter from model 0
+#
+#         z_0: Low-d projections of data from model 0.  This should be after input scales and biases are applied.
+#
+#         z_1: Low-d projections of data from model 1.  This should be after input scales and biases are applied.
+#
+#     """
+#
+#     # Get aligned parameters for model 1
+#     b1_aligned = b_in_0
+#     s1_aligned = s_in_0
+#     t = numpy.linalg.lstsq(w_1, w_0, rcond=None)
+#     w1_aligned = np.matmul(w_0, t[0])
+#
+#     # Get latents for aligned model 1
+#     if z_1 is not None:
+#         z1_rev = (z_1 - b_in_1)/s_in_1  # Remove biases and scales from model 1 projections
+#         z1_aligned = s1_aligned*np.matmul(z1_rev, t[0]) + b1_aligned
+#         return b1_aligned, s1_aligned, w1_aligned, t[0], z1_aligned
+#     else:
+#         return b1_aligned, s1_aligned, w1_aligned, t[0]
 
 
 def approximate_elbo(coll: 'VICollection', priors: 'PriorCollection', n_smps: int, min_psi: float = .0001,
@@ -261,89 +261,89 @@ def approximate_elbo(coll: 'VICollection', priors: 'PriorCollection', n_smps: in
             'b_out_kl': b_out_kl, 'psi_kl': psi_kl}
 
 
-def compare_weight_prior_dists(w0_prior: CondVAEDistribution, w1_prior: CondVAEDistribution,
-                               dim_0_range: Sequence, dim_1_range: Sequence, n_pts_per_dim: Sequence):
-    """ Visualizes two conditional distributions over weights, aligned to one another.
-
-    The w1_prior will be aligned to the w0_prior.
-
-    Note: The function assumes 2-d conditioning variables.
-
-    Args:
-
-        w0_prior: The prior we align to
-
-        w1_prior: The prior we align
-
-        dim_0_range: The range of values of the form [start, stop] for the first dimension of conditioning values we
-        view means and standard deviations over.
-
-        dim_1_range: The range of values of the form [start, stop] for the second dimension of conditioning values we
-        view means and standard deviations over.
-
-        n_pts_per_dim: The number of points per dimension of the form [n_dim_1_pts, n_dim_2_pts] we view conditioning
-        values on for each dimension.
-    """
-    # Code for function starts here
-    pts, dim_pts = list_grid_pts(grid_limits=np.asarray([dim_0_range, dim_1_range]), n_pts_per_dim=n_pts_per_dim)
-    pts = torch.tensor(pts, dtype=torch.float)
-
-    w0_mn = w0_prior(pts).detach().cpu().numpy()
-    w1_mn = w1_prior(pts).detach().cpu().numpy()
-
-
-    # Now get standard deviations
-    if 'dists' in dir(w0_prior):
-        w0_std = np.concatenate([d.std_f(pts).detach().cpu().numpy() for d in w0_prior.dists], axis=1)
-    else:
-        w0_std = w0_prior.std_f(pts).detach().cpu().numpy()
-
-    if 'dists' in dir(w1_prior):
-        w1_std = np.concatenate([d.std_f(pts).detach().cpu().numpy() for d in w1_prior.dists], axis=1)
-    else:
-        w1_std = w1_prior.std_f(pts).detach().cpu().numpy()
-
-    # Align mean and standard deviations of distribution 1 to 2
-    # t = numpy.linalg.lstsq(w1_mn, w0_mn, rcond=None)
-    # print(t[0])
-    #w1_mn_al = np.matmul(w1_mn, t[0])
-
-    w1_mn_supp = np.concatenate([w1_mn, np.ones([w1_mn.shape[0], 1])], axis=1)
-    t = numpy.linalg.lstsq(w1_mn_supp, w0_mn, rcond=None)
-    t = t[0]
-    w1_mn_al = np.matmul(w1_mn_supp, t)
-    t_std = t[0:-1, :]
-
-    w1_std_al = np.zeros(w1_std.shape)
-    for i, std_i in enumerate(w1_std):
-        covar_i = np.diag(std_i**2)
-        covar_i_t = np.matmul(t_std.transpose(), np.matmul(covar_i, t_std))
-        w1_std_al[i, :] = np.sqrt(np.diag(covar_i_t))
-
-    # Generate the figure
-    plt.figure()
-
-    def _plot_image(n_rows, n_cols, im_i, im_pts, title_str):
-        ax = plt.subplot(n_rows, n_cols, im_i)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        im = ax.imshow(im_pts.reshape(n_pts_per_dim), vmin=None, vmax=None, origin='lower')
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        ax.set_title(title_str)
-
-    # Now generate images for modes
-    n_dims = w0_mn.shape[1]
-    n_rows = n_dims
-    cnt = 0
-    for i in range(n_dims):
-        cnt += 1
-        _plot_image(n_rows, 4, cnt, w0_mn[:, i], 'W_0:' + str(i) + ' Mn')
-        cnt += 1
-        _plot_image(n_rows, 4, cnt, w1_mn_al[:, i], 'W_1:' + str(i) + ' Mn')
-        cnt += 1
-        _plot_image(n_rows, 4, cnt, w0_std[:, i], 'W_0:' + str(i) + ' Std')
-        cnt += 1
-        _plot_image(n_rows, 4, cnt, w1_std_al[:, i], 'W_1:' + str(i) + ' Std')
+# def compare_weight_prior_dists(w0_prior: CondVAEDistribution, w1_prior: CondVAEDistribution,
+#                                dim_0_range: Sequence, dim_1_range: Sequence, n_pts_per_dim: Sequence):
+#     """ Visualizes two conditional distributions over weights, aligned to one another.
+#
+#     The w1_prior will be aligned to the w0_prior.
+#
+#     Note: The function assumes 2-d conditioning variables.
+#
+#     Args:
+#
+#         w0_prior: The prior we align to
+#
+#         w1_prior: The prior we align
+#
+#         dim_0_range: The range of values of the form [start, stop] for the first dimension of conditioning values we
+#         view means and standard deviations over.
+#
+#         dim_1_range: The range of values of the form [start, stop] for the second dimension of conditioning values we
+#         view means and standard deviations over.
+#
+#         n_pts_per_dim: The number of points per dimension of the form [n_dim_1_pts, n_dim_2_pts] we view conditioning
+#         values on for each dimension.
+#     """
+#     # Code for function starts here
+#     pts, dim_pts = list_grid_pts(grid_limits=np.asarray([dim_0_range, dim_1_range]), n_pts_per_dim=n_pts_per_dim)
+#     pts = torch.tensor(pts, dtype=torch.float)
+#
+#     w0_mn = w0_prior(pts).detach().cpu().numpy()
+#     w1_mn = w1_prior(pts).detach().cpu().numpy()
+#
+#
+#     # Now get standard deviations
+#     if 'dists' in dir(w0_prior):
+#         w0_std = np.concatenate([d.std_f(pts).detach().cpu().numpy() for d in w0_prior.dists], axis=1)
+#     else:
+#         w0_std = w0_prior.std_f(pts).detach().cpu().numpy()
+#
+#     if 'dists' in dir(w1_prior):
+#         w1_std = np.concatenate([d.std_f(pts).detach().cpu().numpy() for d in w1_prior.dists], axis=1)
+#     else:
+#         w1_std = w1_prior.std_f(pts).detach().cpu().numpy()
+#
+#     # Align mean and standard deviations of distribution 1 to 2
+#     # t = numpy.linalg.lstsq(w1_mn, w0_mn, rcond=None)
+#     # print(t[0])
+#     #w1_mn_al = np.matmul(w1_mn, t[0])
+#
+#     w1_mn_supp = np.concatenate([w1_mn, np.ones([w1_mn.shape[0], 1])], axis=1)
+#     t = numpy.linalg.lstsq(w1_mn_supp, w0_mn, rcond=None)
+#     t = t[0]
+#     w1_mn_al = np.matmul(w1_mn_supp, t)
+#     t_std = t[0:-1, :]
+#
+#     w1_std_al = np.zeros(w1_std.shape)
+#     for i, std_i in enumerate(w1_std):
+#         covar_i = np.diag(std_i**2)
+#         covar_i_t = np.matmul(t_std.transpose(), np.matmul(covar_i, t_std))
+#         w1_std_al[i, :] = np.sqrt(np.diag(covar_i_t))
+#
+#     # Generate the figure
+#     plt.figure()
+#
+#     def _plot_image(n_rows, n_cols, im_i, im_pts, title_str):
+#         ax = plt.subplot(n_rows, n_cols, im_i)
+#         divider = make_axes_locatable(ax)
+#         cax = divider.append_axes('right', size='5%', pad=0.05)
+#         im = ax.imshow(im_pts.reshape(n_pts_per_dim), vmin=None, vmax=None, origin='lower')
+#         plt.colorbar(im, cax=cax, orientation='vertical')
+#         ax.set_title(title_str)
+#
+#     # Now generate images for modes
+#     n_dims = w0_mn.shape[1]
+#     n_rows = n_dims
+#     cnt = 0
+#     for i in range(n_dims):
+#         cnt += 1
+#         _plot_image(n_rows, 4, cnt, w0_mn[:, i], 'W_0:' + str(i) + ' Mn')
+#         cnt += 1
+#         _plot_image(n_rows, 4, cnt, w1_mn_al[:, i], 'W_1:' + str(i) + ' Mn')
+#         cnt += 1
+#         _plot_image(n_rows, 4, cnt, w0_std[:, i], 'W_0:' + str(i) + ' Std')
+#         cnt += 1
+#         _plot_image(n_rows, 4, cnt, w1_std_al[:, i], 'W_1:' + str(i) + ' Std')
 
 
 def eval_check_point_perf(cps: List[dict], eval_data: List[Tuple[torch.Tensor]],
