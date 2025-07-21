@@ -3,6 +3,7 @@
 from typing import Callable, Optional, Sequence
 
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import numpy as np
 
 from janelia_core.math.basic_functions import find_binary_runs
@@ -11,6 +12,7 @@ from janelia_core.math.basic_functions import find_binary_runs
 OptionalAxes = Optional[plt.Axes]
 OptionalCallable = Optional[Callable]
 OptionalMultipleAxes = Optional[Sequence[plt.Axes]]
+
 
 def plot_segmented_signal(tm_pts: np.ndarray, sig: np.ndarray, ax: plt.Axes = None, delta: float = .6,
                           remove_tm_btw_chunks: bool = True, tm_padding: float = 1.0, color='k',
@@ -58,3 +60,44 @@ def plot_segmented_signal(tm_pts: np.ndarray, sig: np.ndarray, ax: plt.Axes = No
 
     return ax
 
+
+def make_blue_red_c_map(n: int = 256, inc_transp: bool = False,
+                        gentle: bool = False) -> mcolors.LinearSegmentedColormap:
+    """Generates a color map that linearly goes from blue at 0, to black at 0.5, to red at 1.
+
+    Args:
+        n: The number of values in the color map.
+        inc_transp: True if values in the middle of the map (black) should also be transparent.
+        gentle: If True, adds gentle fade in/out near the center.
+
+    Returns:
+        cmap: The generated color map.
+    """
+    if inc_transp:
+        middle_alpha = 0.0
+    else:
+        middle_alpha = 1.0
+
+    # RGB: Blue = (0, 0, 1), Red = (1, 0, 0), Black = (0, 0, 0)
+    if not gentle:
+        return mcolors.LinearSegmentedColormap.from_list(
+            name='blue_to_red',
+            colors=[
+                (0.0, [0.0, 0.0, 1.0, 1.0]),              # Blue
+                (0.5, [0.0, 0.0, 0.0, middle_alpha]),      # Black (transparent if specified)
+                (1.0, [1.0, 0.0, 0.0, 1.0])               # Red
+            ],
+            N=n
+        )
+    else:
+        return mcolors.LinearSegmentedColormap.from_list(
+            name='blue_to_red',
+            colors=[
+                (0.0,  [0.0, 0.0, 1.0, 1.0]),               # Blue
+                (0.4,  [0.0, 0.0, 1.0, 0.1]),               # Fade-out blue
+                (0.5,  [0.0, 0.0, 0.0, middle_alpha]),      # Black
+                (0.6,  [1.0, 0.0, 0.0, 0.1]),               # Fade-in red
+                (1.0,  [1.0, 0.0, 0.0, 1.0])                # Red
+            ],
+            N=n
+        )
