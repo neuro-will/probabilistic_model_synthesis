@@ -195,7 +195,7 @@ python update path
 
 For questions regarding the project, please contact:
 
-- William Bishop: [willbishop@gmail.com](mailto:willbishop@gmail.com)
+- William Bishop: [email_address](mailto:email_address)
 - Misha Ahrens: [ahrensm@janelia.hhmi.org](mailto:ahrensm@janelia.hhmi.org)
 
 ---
