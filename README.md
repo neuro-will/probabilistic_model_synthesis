@@ -6,7 +6,7 @@ William E. Bishop<sup>1*</sup>, Luuk W. Hesselink<sup>2,3</sup>, Bernhard Englit
 <sup>2</sup>Department of Neurophysiology, Radboud University, Nijmegen, The Netherlands  
 <sup>3</sup>Donders Institute for Brain, Cognition, and Behaviour, Radboud University, Nijmegen, The Netherlands  
 <sup>4</sup>Department of Neurobiology, Northwestern University, Evanston, IL, USA  
-<sup>*</sup>Correspondence: [willbishop@gmail.com](mailto:willbishop@gmail.com)  
+<sup>*</sup>Correspondence: [email_address](mailto:email_address)  
 <sup>†</sup>Equal contribution
 
 ---
@@ -95,7 +95,7 @@ The results in the manuscript were generated using pre-saved outputs in the `pub
 
 ### Download the data
 
-The data is available at https://doi.org/10.25378/janelia.7272617](https://doi.org/10.25378/janelia.7272617. 
+The data is available at [https://doi.org/10.25378/janelia.7272617](https://doi.org/10.25378/janelia.7272617). 
 The data should be saved to `update path` so that parameter files directly point to the correct file paths.
 
 ### Synthetic Example (Figure 3)
@@ -195,7 +195,7 @@ python update path
 
 For questions regarding the project, please contact:
 
-- Will Bishop: [willbishop@gmail.com](mailto:willbishop@gmail.com)
+- William Bishop: [email_address](mailto:email_address)
 - Misha Ahrens: [ahrensm@janelia.hhmi.org](mailto:ahrensm@janelia.hhmi.org)
 
 ---
