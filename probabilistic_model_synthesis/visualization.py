@@ -2,9 +2,12 @@
 
 from typing import Callable, Optional, Sequence
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
+import matplotlib as mpl
 
 from janelia_core.math.basic_functions import find_binary_runs
 
@@ -12,6 +15,11 @@ from janelia_core.math.basic_functions import find_binary_runs
 OptionalAxes = Optional[plt.Axes]
 OptionalCallable = Optional[Callable]
 OptionalMultipleAxes = Optional[Sequence[plt.Axes]]
+
+def import_style():
+    mpl.style.use(Path(__file__).parent / "rc_params.mplstyle")
+
+import_style()
 
 
 def plot_segmented_signal(tm_pts: np.ndarray, sig: np.ndarray, ax: plt.Axes = None, delta: float = .6,
@@ -94,9 +102,9 @@ def make_blue_red_c_map(n: int = 256, inc_transp: bool = False,
             name='blue_to_red',
             colors=[
                 (0.0,  [0.0, 0.0, 1.0, 1.0]),               # Blue
-                (0.4,  [0.0, 0.0, 1.0, 0.1]),               # Fade-out blue
+                (0.47,  [0.0, 0.0, 1.0, 0.10]),               # Fade-out blue
                 (0.5,  [0.0, 0.0, 0.0, middle_alpha]),      # Black
-                (0.6,  [1.0, 0.0, 0.0, 0.1]),               # Fade-in red
+                (0.53,  [1.0, 0.0, 0.0, 0.10]),               # Fade-in red
                 (1.0,  [1.0, 0.0, 0.0, 1.0])                # Red
             ],
             N=n

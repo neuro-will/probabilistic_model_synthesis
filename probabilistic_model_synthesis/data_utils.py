@@ -420,13 +420,16 @@ def read_in_ahrens_data_for_dim_reduction(data_dir: Path, fit_specs: dict, shock
     label_map = {sp: sp_i for sp_i, sp in enumerate(all_subperiods)}
 
     fit_data = dict()
+    fit_beh_data = dict()
     validation_data = dict()
+    validation_beh_data = dict()
     fit_labels = dict()
     validation_labels = dict()
 
     for s_n, dataset in datasets.items():
 
         data_n = datasets[s_n].ts_data['dff']['vls'][:]
+        data_beh_n = datasets[s_n].ts_data['behavior']['vls'][:]
 
         # Label the subperiods for this subject
         subperiods = label_subperiods(dataset.ts_data['stim']['vls'][:])
@@ -454,11 +457,17 @@ def read_in_ahrens_data_for_dim_reduction(data_dir: Path, fit_specs: dict, shock
         fit_data[s_n] = {k: np.concatenate([data_n[sl['slice'], :] for sl in v], axis=0)
                          for k, v in fit_subperiods.items()}
 
+        fit_beh_data[s_n] = {k: np.concatenate([data_beh_n[sl['slice'], :] for sl in v], axis=0)
+                         for k, v in fit_subperiods.items()}
+
         if n_validation_slices > 0:
             validation_data[s_n] = {k: np.concatenate([data_n[sl['slice'], :] for sl in v], axis=0)
                                     for k, v in validation_subperiods.items()}
+            validation_beh_data[s_n] = {k: np.concatenate([data_beh_n[sl['slice'], :] for sl in v], axis=0)
+                                    for k, v in validation_subperiods.items()}
         else:
             validation_data[s_n] = np.asarray([])
+            validation_beh_data[s_n] = np.asarray([])
 
         # Generate numerical labels for each data point
         fit_labels[s_n] = {k: label_map[k] * np.ones(np.sum([sl_i['slice'].stop - sl_i['slice'].start for sl_i in v]))
@@ -474,14 +483,19 @@ def read_in_ahrens_data_for_dim_reduction(data_dir: Path, fit_specs: dict, shock
     # ==================================================================================================================
     fit_data_conc = {k: np.concatenate([data for data in v.values()], axis=0)
                      for k, v in fit_data.items()}
+    fit_beh_data_conc = {k: np.concatenate([data for data in v.values()], axis=0)
+                     for k, v in fit_beh_data.items()}
     fit_labels_conc = {k: np.concatenate([lbls for lbls in v.values()], axis=0)
                        for k, v in fit_labels.items()}
 
     if n_validation_slices > 0:
         validation_data_conc = {k: np.concatenate([data for data in v.values()], axis=0)
                                 for k, v in validation_data.items()}
+        validation_beh_data_conc = {k: np.concatenate([data for data in v.values()], axis=0)
+                                for k, v in validation_beh_data.items()}
     else:
         validation_data_conc = {k: np.asarray([]) for k in fit_data.keys()}
+        validation_beh_data_conc = {k: np.asarray([]) for k in fit_data.keys()}
 
     if n_validation_slices > 0:
         validation_labels_conc = {k: np.concatenate([lbls for lbls in v.values()], axis=0)
@@ -489,8 +503,9 @@ def read_in_ahrens_data_for_dim_reduction(data_dir: Path, fit_specs: dict, shock
     else:
         validation_labels_conc = {k: np.asarray([]) for k in fit_data.keys()}
 
-    data = {'fit_data': fit_data_conc, 'fit_labels': fit_labels_conc,
-            'validation_data': validation_data_conc, 'validation_labels': validation_labels_conc}
+    data = {'fit_data': fit_data_conc, 'fit_beh_data': fit_beh_data_conc, 'fit_labels': fit_labels_conc,
+            'validation_data': validation_data_conc, 'validation_beh_data': validation_beh_data_conc,
+            'validation_labels': validation_labels_conc}
 
     return data, label_map, neuron_locs
 
