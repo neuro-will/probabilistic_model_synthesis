@@ -6,7 +6,7 @@ William E. Bishop<sup>1*</sup>, Luuk W. Hesselink<sup>2,3</sup>, Bernhard Englit
 <sup>2</sup>Department of Neurophysiology, Radboud University, Nijmegen, The Netherlands  
 <sup>3</sup>Donders Institute for Brain, Cognition, and Behaviour, Radboud University, Nijmegen, The Netherlands  
 <sup>4</sup>Department of Neurobiology, Northwestern University, Evanston, IL, USA  
-<sup>*</sup>Correspondence: [email_address](mailto:willbishop@gmail.com)  
+<sup>*</sup>Correspondence: [willbishop@gmail.com](mailto:willbishop@gmail.com)  
 <sup>†</sup>Equal contribution
 
 ---
@@ -198,7 +198,7 @@ python /fold_and_segments_generation/Fill in
 
 For questions regarding the project, please contact:
 
-- William Bishop: [email_address](mailto:willbishop@gmail.com)
+- William Bishop: [willbishop@gmail.com](mailto:willbishop@gmail.com)
 
 ---
 
