@@ -26,6 +26,8 @@ For more details, read the manuscript:
 **Deep Probabilistic Model Synthesis**  
 *(DOI)*
 
+![DPMS overview figure](./github_figure.png)
+
 ---
 
 ## Repository Contents
