@@ -204,5 +204,5 @@ For questions regarding the project, please contact:
 
 ## License
 
-This code and data are provided for academic, non-commercial use.  
-Use of the data must be accompanied by citation of the relevant papers.
+This project’s code is licensed under the MIT License. See the `LICENSE` file for details.
+Data are provided by the original authors/publishers and may be subject to separate terms; please cite the referenced papers when using the dataset.
