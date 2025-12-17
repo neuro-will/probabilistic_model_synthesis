@@ -200,9 +200,3 @@ For questions regarding the project, please contact:
 
 - William Bishop: [willbishop@gmail.com](mailto:willbishop@gmail.com)
 
----
-
-## License
-
-This project’s code is licensed under the MIT License. See the `LICENSE` file for details.
-Data are provided by the original authors/publishers and may be subject to separate terms; please cite the referenced papers when using the dataset.
