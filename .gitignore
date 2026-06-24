@@ -79,6 +79,29 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Local editor/agent state
+.idea/
+.codex
+
+# Local/private notes
+email.txt
+nature research_software submis.txt
+
+# Downloaded data and large generated research artifacts
+data/*
+!data/*.py
+!data/fold_and_segment_structures/
+!data/fold_and_segment_structures/**
+results/
+*.zip
+results/**/*.pt
+results/**/*.pkl
+results/**/*.npy
+results/**/*.npz
+results/**/*.mat
+results/**/*.h5
+results/**/*.hdf5
+
 # IPython
 profile_default/
 ipython_config.py

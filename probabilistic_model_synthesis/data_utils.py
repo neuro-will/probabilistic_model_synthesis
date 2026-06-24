@@ -4,6 +4,8 @@ from itertools import chain
 from pathlib import Path
 from typing import Sequence, List, Callable, Union
 import collections
+import json
+import warnings
 
 import numpy as np
 import torch
@@ -28,6 +30,94 @@ from janelia_core.ml.datasets import TimeSeriesBatch
 from probabilistic_model_synthesis.annotations import label_periods
 from probabilistic_model_synthesis.annotations import label_subperiods
 from probabilistic_model_synthesis.annotations import stim_to_binary_array
+
+
+def _slice_to_json(s: slice) -> dict:
+    return {
+        "__type__": "slice",
+        "start": None if s.start is None else int(s.start),
+        "stop": None if s.stop is None else int(s.stop),
+        "step": None if s.step is None else int(s.step),
+    }
+
+
+def _json_to_slice(d: dict) -> slice:
+    return slice(d["start"], d["stop"], d["step"])
+
+
+def _to_jsonable(obj):
+    if isinstance(obj, slice):
+        return _slice_to_json(obj)
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return [_to_jsonable(v) for v in obj.tolist()]
+    if isinstance(obj, dict):
+        return {str(k): _to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_jsonable(v) for v in obj]
+    return obj
+
+
+def _from_jsonable(obj):
+    if isinstance(obj, dict):
+        if obj.get("__type__") == "slice":
+            return _json_to_slice(obj)
+        out = {}
+        for k, v in obj.items():
+            try:
+                out_key = int(k)
+            except (TypeError, ValueError):
+                out_key = k
+            out[out_key] = _from_jsonable(v)
+        return out
+    if isinstance(obj, list):
+        return [_from_jsonable(v) for v in obj]
+    return obj
+
+
+def save_json_artifact(obj, path: Union[str, Path]):
+    """Save fold/segment metadata as JSON without pickle deserialization risk."""
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(_to_jsonable(obj), f, indent=2)
+
+
+def load_json_artifact(path: Union[str, Path]):
+    """Load fold/segment metadata saved by save_json_artifact()."""
+    with open(path, "r", encoding="utf-8") as f:
+        return _from_jsonable(json.load(f))
+
+
+def load_trusted_pickle(path: Union[str, Path]):
+    """Load a trusted pickle artifact.
+
+    Pickle can execute arbitrary code. Use this only for files generated locally
+    or distributed by a trusted source.
+    """
+    with open(path, "rb") as f:
+        return pickle.load(f)
+
+
+def load_fold_structure(path: Union[str, Path]):
+    """Load a fold structure from JSON, or from a legacy pickle file."""
+    path = Path(path)
+    if path.suffix == ".json":
+        return load_json_artifact(path)
+    return load_trusted_pickle(path)
+
+
+def load_segment_tables(path: Union[str, Path]) -> dict:
+    """Load serialized segment tables from JSON or legacy pickle."""
+    path = Path(path)
+    if path.suffix == ".json":
+        segment_file_data = load_json_artifact(path)
+    else:
+        segment_file_data = load_trusted_pickle(path)
+
+    segment_tables = segment_file_data["segment_tables"]
+    return {int(s_n): SegmentTable.from_dict(v) for s_n, v in segment_tables.items()}
 
 
 def break_periods_into_chunks(period_lbls: dict, groups: collections.OrderedDict, chunk_size: int) -> Sequence:
@@ -187,7 +277,8 @@ def load_and_preprocess_data(data_folder: Path, subjects: Sequence[int], stim_va
         normalize_beh_vars: True if behavioral signals should be normalized.  This is done by dividing by the
         max of the kept behavioral signals in the phototaxis periods without shock for each subject.
 
-        neural_gain: The gain to apply to the neural data (dff as well as spikes)
+        neural_gain: The gain to apply to neural data. This is always applied to dff and is also applied to spikes
+        if deconvolved spikes are available.
 
         beh_gain: The gain to apply to the behavioral data
 
@@ -229,7 +320,8 @@ def load_and_preprocess_data(data_folder: Path, subjects: Sequence[int], stim_va
     # Apply gains to data
     for s_n in subjects:
         subject_data[s_n].ts_data['dff']['vls'][:] = neural_gain*subject_data[s_n].ts_data['dff']['vls'][:]
-        subject_data[s_n].ts_data['spikes']['vls'][:] = neural_gain*subject_data[s_n].ts_data['spikes']['vls'][:]
+        if 'spikes' in subject_data[s_n].ts_data:
+            subject_data[s_n].ts_data['spikes']['vls'][:] = neural_gain*subject_data[s_n].ts_data['spikes']['vls'][:]
         subject_data[s_n].ts_data['behavior']['vls'][:] = beh_gain*subject_data[s_n].ts_data['behavior']['vls'][:]
 
     # Handle input
@@ -255,11 +347,11 @@ def load_and_preprocess_data(data_folder: Path, subjects: Sequence[int], stim_va
 
 
 def load_processed_data(main_folder: str) -> PointDataset:
-    """ Loads processed data, as originally distributed on Figshare and then deconvolved.
+    """ Loads processed data, as originally distributed on Figshare.
 
     Args:
-        main_folder: The path to the folder holding the data.  This folder should contain the 'data_full.mat',
-        the 'TimeSeries.h5' and 'all_deconvolved.pkl' files for the subject.
+        main_folder: The path to the folder holding the data. This folder should contain `data_full.mat` and
+        `TimeSeries.h5`. If `all_deconvolved.pkl` is present, deconvolved calcium/spike traces are also loaded.
 
     Returns:
         dataset: Object representing the dataset. Structured as follows:
@@ -268,8 +360,8 @@ def load_processed_data(main_folder: str) -> PointDataset:
                 ts_data['behavior']: Contains behavior information
                 ts_data['behavior_motor_seed']: Contains behavior motor seed information
                 ts_data['dff']: Contains delta F/F for the experiment
-                ts_data['calcium']: Contains estimated calcium traces from deconvolution
-                ts_data['spikes']: Contains estimated spike trains from deconvolution
+                ts_data['calcium']: Contains estimated calcium traces from deconvolution, if all_deconvolved.pkl exists
+                ts_data['spikes']: Contains estimated spike trains from deconvolution, if all_deconvolved.pkl exists
 
             point_groups: Has one group for the cells in the dataset.  Each cell has a raw and registered position.
 
@@ -325,16 +417,26 @@ def load_processed_data(main_folder: str) -> PointDataset:
     ts_data['dff'] = {'ts': time_stamps,
                       'vls': NDArrayHandler(main_folder, 'dff.pkl', cellResp)}
 
-    # Gather deconvolution information
+    # Gather deconvolution information, if available. The manuscript analyses use dff, not the deconvolved traces.
     deconvolution_file = main_folder_path / 'all_deconvolved.pkl'
-    with open(deconvolution_file, 'rb') as f:
-        deconvRs = pickle.load(f)
+    if deconvolution_file.exists():
+        with open(deconvolution_file, 'rb') as f:
+            deconvRs = pickle.load(f)
 
-    ts_data['calcium'] = {'ts': time_stamps,
-                          'vls': NDArrayHandler(main_folder, 'calcium.pkl', deconvRs['calcium'])}
+        ts_data['calcium'] = {'ts': time_stamps,
+                              'vls': NDArrayHandler(main_folder, 'calcium.pkl', deconvRs['calcium'])}
 
-    ts_data['spikes'] = {'ts': time_stamps,
-                         'vls': NDArrayHandler(main_folder, 'spikes.pkl', deconvRs['spikes'])}
+        ts_data['spikes'] = {'ts': time_stamps,
+                             'vls': NDArrayHandler(main_folder, 'spikes.pkl', deconvRs['spikes'])}
+        deconvolved_ts_labels = ['dff', 'spikes']
+    else:
+        warnings.warn(
+            f"No all_deconvolved.pkl found in {main_folder_path}. "
+            "Continuing with dff-only data; calcium/spikes time series will be unavailable.",
+            RuntimeWarning,
+        )
+        deconvRs = None
+        deconvolved_ts_labels = ['dff']
 
     # Gather location of cells
     absIX = np.squeeze(absIX.astype('long'))
@@ -346,17 +448,18 @@ def load_processed_data(main_folder: str) -> PointDataset:
         abs_ix_i = abs_ix_i - 1 # Go from MATLAB to Python indexing
         points[c_i] = Point(np.stack([cell_centers[abs_ix_i, :], cell_centers_reg[abs_ix_i, :]]),
                             ['raw', 'reg'])
-    cell_points = {'ts_labels': ['dff', 'spikes'], 'points': points}
+    cell_points = {'ts_labels': deconvolved_ts_labels, 'points': points}
     point_groups = {'cells': cell_points}
 
     # Save anatomical information
     stats = {'mn': np.swapaxes(data.anat_stack, 0, 2)}
 
     # Save deconvolution parameters
-    metadata['deconvolution_params'] = dict()
-    metadata['deconvolution_params']['baselines'] = deconvRs['baselines']
-    metadata['deconvolution_params']['g'] = deconvRs['g']
-    metadata['deconvolution_params']['lam'] = deconvRs['lam']
+    if deconvRs is not None:
+        metadata['deconvolution_params'] = dict()
+        metadata['deconvolution_params']['baselines'] = deconvRs['baselines']
+        metadata['deconvolution_params']['g'] = deconvRs['g']
+        metadata['deconvolution_params']['lam'] = deconvRs['lam']
 
     return PointDataset(ts_data=ts_data, metadata=metadata, point_groups=point_groups, stats=stats)
 

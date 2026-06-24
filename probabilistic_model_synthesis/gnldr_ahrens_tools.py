@@ -7,15 +7,15 @@ import copy
 import glob
 from typing import List, Optional, Sequence, Tuple
 import pathlib
-import pickle
 
 import numpy as np
 import torch
 
 from probabilistic_model_synthesis.annotations import label_subperiods
 from probabilistic_model_synthesis.data_utils import generate_torch_dataset
+from probabilistic_model_synthesis.data_utils import load_fold_structure
 from probabilistic_model_synthesis.data_utils import load_and_preprocess_data
-from probabilistic_model_synthesis.data_utils import SegmentTable
+from probabilistic_model_synthesis.data_utils import load_segment_tables
 
 from probabilistic_model_synthesis.fa import orthonormalize
 from probabilistic_model_synthesis.gaussian_nonlinear_dim_reduction import approximate_elbo
@@ -347,15 +347,11 @@ def post_process(results_file: str, early_stopping_subjects: Sequence[int] = Non
 
     # Load segment tables
     segment_table_path = pathlib.Path(fit_ps['segment_table_dir']) / fit_ps['segment_table_file']
-    with open(segment_table_path, 'rb') as f:
-        st_data = pickle.load(f)
-        segment_tables = st_data['segment_tables']
-    segment_tables = {k: SegmentTable.from_dict(v) for k, v in segment_tables.items()}
+    segment_tables = load_segment_tables(segment_table_path)
 
     # Load fold structures
     fold_str_path = pathlib.Path(fit_ps['fold_str_dir']) / fit_ps['fold_str_file']
-    with open(fold_str_path, 'rb') as f:
-        fold_groups = pickle.load(f)
+    fold_groups = load_fold_structure(fold_str_path)
 
     # Load data
     subject_data, subject_neuron_locs = load_and_preprocess_data(data_folder=fit_ps['data_dir'],
@@ -488,8 +484,7 @@ def syn_ahrens_fa_mdls(fold_str_dir: str, fold_str_file: str, segment_table_dir:
     fold_str_path = pathlib.Path(fold_str_dir) / fold_str_file
     print_info('Loading fold structure from file: ' + str(fold_str_path))
 
-    with open(fold_str_path, 'rb') as f:
-        fold_groups = pickle.load(f)
+    fold_groups = load_fold_structure(fold_str_path)
 
     # ======================================================================================================================
     # Load segment tables
@@ -499,11 +494,7 @@ def syn_ahrens_fa_mdls(fold_str_dir: str, fold_str_file: str, segment_table_dir:
     segment_table_path = pathlib.Path(segment_table_dir) / segment_table_file
     print_info('Loading segment tables from: ' + str(segment_table_path))
 
-    with open(segment_table_path, 'rb') as f:
-        segment_file_data = pickle.load(f)
-        segment_tables = segment_file_data['segment_tables']
-        for s_n in segment_tables.keys():
-            segment_tables[s_n] = SegmentTable.from_dict(segment_tables[s_n])
+    segment_tables = load_segment_tables(segment_table_path)
 
     # ======================================================================================================================
     # Apply the subject filter if needed
