@@ -355,6 +355,10 @@ results/simulation/reg_with_varying_no_of_example_systems/reg_synthesis_with_var
 results/simulation/reg_with_varying_no_of_example_systems/reg_synthesis_with_varying_n_ex_systems.svg
 ```
 
+## Running DPMS on New Data
+
+Currently, we have implemented methods for using DPMS to fit non-linear regression models and factor analysis models.  To fit non-linear regression models, use the function fit_with_hypercube_priors() in the [gaussian_nonlinear_regression module](probabilistic_model_synthesis/gaussian_nonlinear_regression.py).  To fit factor analysis models, use the function synthesize_fa_mdls() found in the [gaussian_nonlinear_dim_reduction](probabilistic_model_synthesis/gaussian_nonlinear_dim_reduction.py) module.  Both functions document the format of data they expect.  Fitting can take minutes to hours depending on the amount of data and number of observed variables used.
+
 ## License
 
 This software is released under the MIT License. See `LICENSE`.
