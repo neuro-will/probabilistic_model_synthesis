@@ -19,16 +19,17 @@ This folder contains the paired cross-fold across-condition transfer analysis fo
   - Default mode is full re-fit + postprocess for the paired folds.
   - Early stopping scope is configurable and defaults to target fish only (`EARLY_STOPPING_SCOPE='target_only'`).
   - Writes a manifest to:
-    - `results/publication_results/gnldr/quantification_paired/_manifests/`
+    - `results/figure_5/runs/_manifests/`
   - Writes array logs to:
-    - `results/publication_results/gnldr/quantification_paired/_array_logs/`
+    - `results/figure_5/runs/_array_logs/`
   - Saves results under:
-    - `results/publication_results/gnldr/quantification_paired/<condition>/fold_<k>/subj_<id>/<fit_type>/...`
+    - `results/figure_5/runs/<condition>/fold_<k>/subj_<id>/<fit_type>/...`
 - `sweep_worker.py`
   - Executes one manifest row for local or LSF-array execution.
   - Supports `fit_only`, `post_only`, and `fit_and_post` modes.
 - `make_across_cond_plots.ipynb`
   - Fold-aware plotting and statistics notebook.
+  - Saves generated figures under `results/figure_5/figures/`.
   - Per-fish tests: two-sided exact sign-count tests across condition-cell values within each fish, reported separately for diagonal and off-diagonal train/test pairs.
   - Pooled tests: two-sided exact sign-count tests across all valid condition-cell values, reported separately for diagonal and off-diagonal train/test pairs.
 

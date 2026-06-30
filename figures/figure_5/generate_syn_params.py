@@ -24,7 +24,7 @@ ps['note'] = 'Publication results - figure 5 paired cross-fold analysis with tar
 ps['param_filename'] = 'fit_params_paired.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = str(REPO_ROOT / 'results/publication_results/gnldr/quantification_paired')
+ps['param_save_dir'] = str(REPO_ROOT / 'results/figure_5/runs')
 
 # ======================================================================================================================
 #   Specify where results will be saved

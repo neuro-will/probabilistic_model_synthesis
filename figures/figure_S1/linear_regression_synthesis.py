@@ -46,15 +46,17 @@ import_style()
 # ==================================================================================================================
 
 LOAD_PREV_RESULTS = True
-SAVE_DIR = r'/results/simulation/reg_with_varying_no_of_example_systems/'
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+RUNS_DIR = REPO_ROOT / 'results/figure_S1/runs'
+FIGURES_DIR = REPO_ROOT / 'results/figure_S1/figures'
 SAVE_FILE = r'reg_synthesis_with_varying_n_ex_systems.pkl'
 FIG_SAVE_FILE = r'reg_synthesis_with_varying_n_ex_systems.svg'
 
-SAVE_PATH = pathlib.Path(SAVE_DIR) / SAVE_FILE
-FIG_SAVE_PATH = pathlib.Path(SAVE_DIR) / FIG_SAVE_FILE
+SAVE_PATH = RUNS_DIR / SAVE_FILE
+FIG_SAVE_PATH = FIGURES_DIR / FIG_SAVE_FILE
 
-if not os.path.exists(SAVE_DIR):
-    os.makedirs(SAVE_DIR)
+RUNS_DIR.mkdir(parents=True, exist_ok=True)
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 # ==================================================================================================================
 # Helper functions
@@ -176,7 +178,11 @@ def run_simulation(params):
 
 if __name__ == '__main__':
 
-    if not LOAD_PREV_RESULTS:
+    load_previous_results = LOAD_PREV_RESULTS and SAVE_PATH.is_file()
+    if LOAD_PREV_RESULTS and not load_previous_results:
+        print('No previous simulation results found at ' + str(SAVE_PATH) + '; running simulations instead.')
+
+    if not load_previous_results:
 
         # ==================================================================================================================
         # Parameters go here

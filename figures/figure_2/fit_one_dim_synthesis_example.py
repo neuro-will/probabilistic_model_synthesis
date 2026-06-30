@@ -189,11 +189,13 @@ ps['random_seed'] = 1  # Set to None, to not set random seeds
 
 # ======================================================================================================
 # Location we should save results
-ps['save_folder'] = str(pathlib.Path(__file__).resolve().parents[2] / 'results/publication_results/gnlr/simulation')
+ps['save_folder'] = str(pathlib.Path(__file__).resolve().parents[2] / 'results/figure_2/runs')
 ps['save_file'] = 'full_simulations.pt'
 
 if args.save_folder is not None:
     ps['save_folder'] = args.save_folder
+
+pathlib.Path(ps['save_folder']).mkdir(parents=True, exist_ok=True)
 
 # ======================================================================================================================
 # Define helper functions here

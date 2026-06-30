@@ -37,8 +37,8 @@ EARLY_STOPPING_SCOPE = "target_only"
 FOLD_STR_PRE_STR = "ac_an_disjoint_paired"
 FOLD_STR_APP_STR = "folds.json"
 
-PARAM_FILE = REPO_ROOT / "results/publication_results/gnldr/quantification_paired/fit_params_paired.pkl"
-RESULTS_DIR = REPO_ROOT / "results/publication_results/gnldr/quantification_paired"
+PARAM_FILE = REPO_ROOT / "results/figure_5/runs/fit_params_paired.pkl"
+RESULTS_DIR = REPO_ROOT / "results/figure_5/runs"
 
 N_SLOTS = 1
 N_GPU = 1

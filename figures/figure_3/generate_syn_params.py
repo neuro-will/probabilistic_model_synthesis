@@ -25,7 +25,7 @@ ps['note'] = ('Publication results.')
 ps['param_filename'] = 'fit_params.pkl'
 
 # Directory where we should save these parameters
-ps['param_save_dir'] = str(REPO_ROOT / 'results/publication_results/gnlr/real_data')
+ps['param_save_dir'] = str(REPO_ROOT / 'results/figure_3/runs')
 
 # ======================================================================================================================
 #   Specify where results will be saved

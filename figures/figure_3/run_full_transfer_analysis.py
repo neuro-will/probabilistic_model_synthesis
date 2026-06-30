@@ -32,8 +32,8 @@ FOLD_STR_FILES = [
 N_FOLDS = 3
 TYPES = ["comb", "ind"]
 
-PARAM_FILE = REPO_ROOT / "results/publication_results/gnlr/real_data/fit_params.pkl"
-RESULTS_DIR = REPO_ROOT / "results/publication_results/gnlr/real_data"
+PARAM_FILE = REPO_ROOT / "results/figure_3/runs/fit_params.pkl"
+RESULTS_DIR = REPO_ROOT / "results/figure_3/runs"
 FIT_SCRIPT = REPO_ROOT / "figures/figure_3/syn_ahrens_gnlr_mdls.py"
 POST_PROCESS_SCRIPT = REPO_ROOT / "figures/figure_3/post_process.py"
 
