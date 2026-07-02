@@ -28,7 +28,6 @@ Repository: https://github.com/neuro-will/probabilistic_model_synthesis
 - `figures/figure_5/`: Cross-condition factor-analysis transfer analysis.
 - `figures/figure_S1/`: Supplemental linear-regression synthesis simulation.
 - `data/`: Manuscript data downloader and tracked fold/segment inputs.
-- `folds_and_segments_generation/`: Notebooks used to generate real-data segment and fold structures.
 
 ## System Requirements
 
